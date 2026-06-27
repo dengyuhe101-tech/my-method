@@ -1,0 +1,27 @@
+# Python/build products
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+src/build/
+src/dist/
+
+# ORSDet runtime outputs
+outputs/
+orsdet/**/outputs/
+checkpoints/
+external_data/560Mhz-1kh/
+
+# Large regenerated data/products
+*.dat
+*.fits
+*.npy
+*.npz
+
+# Keep source-side calibration tables and README placeholders
+!orsdet/resources/*.txt
+!weights/
+!weights/net0_s2700.dat
+!external_data/README.md

@@ -1,0 +1,21 @@
+# Minimal Python dependencies for the CIANNA SKAO_SDC1 workflow on RTX 4090.
+# Install this only after activating the project-local virtual environment.
+#
+# The project does not import torch or ultralytics in the retained SKAO_SDC1
+# workflow. Keep them out of this environment unless you have a separate reason,
+# because extra CUDA runtime libraries can make the native CIANNA module link
+# against the wrong CUDA stack.
+
+numpy==1.26.4
+scipy==1.11.4
+astropy==6.1.7
+matplotlib==3.9.1
+numba==0.60.0
+tqdm==4.67.1
+ska_sdc==2.0.0
+pandas==2.2.3
+scikit-learn==1.5.2
+
+cmake==3.30.5
+wheel==0.44.0
+setuptools==75.1.0
