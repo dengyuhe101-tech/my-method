@@ -3,4 +3,6 @@ Convolutional Interactive Artificial Neural Networks by/for Astrophysicists (CIA
 
 These files are Copyright (C) 2024 David Cornu (https://github.com/Deyht/CIANNA), but released under the Apache2 License.
 
+This ORSDet distribution may include packaging and runtime integration changes
+to the bundled CIANNA source tree. See MODIFICATIONS.md and ../NOTICE.md.
 

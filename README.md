@@ -21,6 +21,8 @@ Large files are external by design except for the released best checkpoint:
 
 ```text
 ORSDet/
+  LICENSE.md                # Apache License 2.0 for this release
+  NOTICE.md                 # upstream attribution and ORSDet notices
   train.py                  # training entry point
   test.py                   # inference/evaluation entry point
   requirements.txt
@@ -28,6 +30,7 @@ ORSDet/
   external_data/README.md
   orsdet/                   # ORSDet data, target, detector, flux-head, eval code
   src/                      # CIANNA C/CUDA backend source
+  src/MODIFICATIONS.md      # notes on ORSDet changes to bundled CIANNA source
 ```
 
 The included checkpoint is:
@@ -102,3 +105,19 @@ The default output directory is `outputs/train/`. The final packaged checkpoint
 is written under `outputs/train/net_save/`.
 
 Generated outputs are written under `outputs/` and are ignored by Git.
+
+## License and Attribution
+
+ORSDet is released under the Apache License, Version 2.0. See `LICENSE.md`.
+
+This repository includes and builds against the CIANNA C/CUDA backend source
+tree under `src/`, originally by David Cornu and released under the Apache
+License, Version 2.0. The upstream attribution is preserved in `NOTICE.md` and
+`src/NOTICE.md`; source files under `src/src/` also retain their original
+copyright and license headers.
+
+ORSDet-specific additions and modifications are noted in `NOTICE.md`. Changes
+to the bundled CIANNA source tree are summarized in `src/MODIFICATIONS.md`.
+The official SKAO SDC1 raw FITS/catalog files are not redistributed here; place
+them under `external_data/560Mhz-1kh/` or point `SDC1_RAW_DATA_DIR` to a local
+copy obtained under the applicable data terms.
