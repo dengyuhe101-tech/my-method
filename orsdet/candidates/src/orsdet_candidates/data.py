@@ -1,4 +1,4 @@
-"""OBB-driven target construction for V2.5."""
+"""OBB-driven target construction for candidate."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from orsdet_geometry.geometry import canonicalize_le90, hbb_from_obb, xywhtheta_
 from orsdet_angle.angle_codec import encode_theta_le90
 from orsdet_angle.angle_loss import AspectWeightConfig, angle_weight_from_aspect
 from orsdet_angle.angle_weight_variants import SmallElongatedBoostConfig, boost_small_elongated_weights
-from orsdet_angle.tables import DEFAULT_V1_TABLE, load_v1_rotated_table
+from orsdet_angle.tables import DEFAULT_SOURCE_TABLE, load_rotated_source_table
 
-from .decode import V25_NB_ANGLE, V25_NB_PARAM, V25_TARGET_STRIDE, v25_target_dim
+from .decode import CANDIDATE_NB_ANGLE, CANDIDATE_NB_PARAM, CANDIDATE_TARGET_STRIDE, candidate_target_dim
 
 
 EPS = 1.0e-8
@@ -100,12 +100,12 @@ def _obb_to_hbb_fast(boxes):
     return np.column_stack([boxes[:, 0] - dx, boxes[:, 1] - dy, boxes[:, 0] + dx, boxes[:, 1] + dy])
 
 
-class V25DataBuilder:
+class CandidateDataBuilder:
     def __init__(
         self,
         dg,
         *,
-        v1_table_path: Path = DEFAULT_V1_TABLE,
+        source_table_path: Path = DEFAULT_SOURCE_TABLE,
         weight_config: AspectWeightConfig | None = None,
         small_elongated_boost: SmallElongatedBoostConfig | None = None,
     ):
@@ -114,63 +114,63 @@ class V25DataBuilder:
         self.max_objects = int(dg.max_nb_obj_per_image)
         self.weight_config = weight_config or AspectWeightConfig()
         self.small_elongated_boost = small_elongated_boost
-        self.target_dim = v25_target_dim(self.max_objects)
+        self.target_dim = candidate_target_dim(self.max_objects)
 
         train_list = np.loadtxt(dg.training_selection_path())
         self.source_ids = train_list[:, 0].astype(np.int64)
 
-        v1_table = load_v1_rotated_table(v1_table_path)
-        row_map = {int(source_id): idx for idx, source_id in enumerate(v1_table["source_id"].astype(np.int64))}
+        source_table = load_rotated_source_table(source_table_path)
+        row_map = {int(source_id): idx for idx, source_id in enumerate(source_table["source_id"].astype(np.int64))}
         try:
             row_idx = np.asarray([row_map[int(source_id)] for source_id in self.source_ids], dtype=np.int64)
         except KeyError as exc:
-            raise KeyError("Missing source id in V1 OBB table: %s" % (exc.args[0],)) from exc
-        self.v1_table = v1_table[row_idx]
+            raise KeyError("Missing source id in geometry OBB table: %s" % (exc.args[0],)) from exc
+        self.source_table = source_table[row_idx]
 
         self.boxes_global = np.column_stack(
             [
-                self.v1_table["cx_pix"],
-                self.v1_table["cy_pix"],
-                self.v1_table["w_pix"],
-                self.v1_table["h_pix"],
-                self.v1_table["theta_le90_deg"],
+                self.source_table["cx_pix"],
+                self.source_table["cy_pix"],
+                self.source_table["w_pix"],
+                self.source_table["h_pix"],
+                self.source_table["theta_le90_deg"],
             ]
         ).astype(np.float64)
         self.global_hbb = hbb_from_obb(self.boxes_global)
 
         self.flux_norm = np.asarray(dg.flux_list, dtype=np.float64)
         self.angle_weights = angle_weight_from_aspect(
-            np.asarray(self.v1_table["aspect_ratio"], dtype=np.float64),
+            np.asarray(self.source_table["aspect_ratio"], dtype=np.float64),
             self.weight_config,
         )
-        small_angle = np.asarray(self.v1_table["bmaj_arcsec"], dtype=np.float64) <= float(dg.pa_res_lim)
+        small_angle = np.asarray(self.source_table["bmaj_arcsec"], dtype=np.float64) <= float(dg.pa_res_lim)
         self.angle_weights[small_angle] = np.minimum(self.angle_weights[small_angle], self.weight_config.min_weight)
         self.small_elongated_boost_mask = np.zeros_like(self.angle_weights, dtype=bool)
         if small_elongated_boost is not None and small_elongated_boost.boost_factor > 1.0:
             sqrt_area = np.sqrt(
                 np.maximum(
-                    np.asarray(self.v1_table["w_pix"], dtype=np.float64)
-                    * np.asarray(self.v1_table["h_pix"], dtype=np.float64),
+                    np.asarray(self.source_table["w_pix"], dtype=np.float64)
+                    * np.asarray(self.source_table["h_pix"], dtype=np.float64),
                     0.0,
                 )
             )
             self.angle_weights, self.small_elongated_boost_mask = boost_small_elongated_weights(
                 self.angle_weights,
-                np.asarray(self.v1_table["aspect_ratio"], dtype=np.float64),
+                np.asarray(self.source_table["aspect_ratio"], dtype=np.float64),
                 sqrt_area,
                 small_elongated_boost,
             )
 
         self.norm_lims = self._build_norm_lims()
-        width_log = np.log(np.maximum(np.asarray(self.v1_table["w_pix"], dtype=np.float64), EPS))
-        height_log = np.log(np.maximum(np.asarray(self.v1_table["h_pix"], dtype=np.float64), EPS))
+        width_log = np.log(np.maximum(np.asarray(self.source_table["w_pix"], dtype=np.float64), EPS))
+        height_log = np.log(np.maximum(np.asarray(self.source_table["h_pix"], dtype=np.float64), EPS))
         self.width_norm = _normalize_log_values(width_log, self.norm_lims[1])
         self.height_norm = _normalize_log_values(height_log, self.norm_lims[2])
 
     def _build_norm_lims(self):
         flux_lims = np.asarray(self.dg.lims[0], dtype=np.float64)
-        width_log = np.log(np.maximum(np.asarray(self.v1_table["w_pix"], dtype=np.float64), EPS))
-        height_log = np.log(np.maximum(np.asarray(self.v1_table["h_pix"], dtype=np.float64), EPS))
+        width_log = np.log(np.maximum(np.asarray(self.source_table["w_pix"], dtype=np.float64), EPS))
+        height_log = np.log(np.maximum(np.asarray(self.source_table["h_pix"], dtype=np.float64), EPS))
         width_row = np.array([np.max(width_log), np.min(width_log)], dtype=np.float64)
         height_row = np.array([np.max(height_log), np.min(height_log)], dtype=np.float64)
         return np.vstack([flux_lims, width_row, height_row])
@@ -229,8 +229,8 @@ class V25DataBuilder:
                 ],
                 dtype=np.float32,
             )
-            start = 1 + out_idx * V25_TARGET_STRIDE
-            target[start : start + V25_TARGET_STRIDE] = row
+            start = 1 + out_idx * CANDIDATE_TARGET_STRIDE
+            target[start : start + CANDIDATE_TARGET_STRIDE] = row
 
         if return_meta:
             meta = PatchMeta(

@@ -28,9 +28,8 @@ ORSDet/
   requirements.txt
   weights/net0_s2700.dat    # released checkpoint used by default test.py
   external_data/README.md
-  orsdet/                   # ORSDet data, target, detector, flux-head, eval code
+  orsdet/                   # ORSDet data, target, detector, flux head, eval code
   src/                      # CIANNA C/CUDA backend source
-  src/MODIFICATIONS.md      # notes on ORSDet changes to bundled CIANNA source
 ```
 
 The included checkpoint is:
@@ -86,7 +85,7 @@ outputs/test_eval/
 To test another checkpoint:
 
 ```bash
-python test.py --gpu 0 --checkpoint /path/to/net0_s2700.dat --epoch 2700
+python test.py --gpu 0 --checkpoint /path/to/xxxx.dat
 ```
 
 To score an existing catalog without GPU inference:
@@ -98,7 +97,7 @@ python test.py --catalog /path/to/catalog_sdc1_2700.txt
 ## Train
 
 ```bash
-python train.py --gpu 0 --epochs 2700 --save-every 100
+python train.py --gpu 0 --epochs 5000 --save-every 100
 ```
 
 The default output directory is `outputs/train/`. The final packaged checkpoint
@@ -108,16 +107,14 @@ Generated outputs are written under `outputs/` and are ignored by Git.
 
 ## License and Attribution
 
-ORSDet is released under the Apache License, Version 2.0. See `LICENSE.md`.
+ORSDet is distributed under the Apache License, Version 2.0. See `LICENSE.md`.
+Additional attribution notices are in `NOTICE.md`.
 
-This repository includes and builds against the CIANNA C/CUDA backend source
-tree under `src/`, originally by David Cornu and released under the Apache
-License, Version 2.0. The upstream attribution is preserved in `NOTICE.md` and
-`src/NOTICE.md`; source files under `src/src/` also retain their original
-copyright and license headers.
+This repository is based on the YOLO-CIANNA method by Cornu et al. and the
+CIANNA code by David Cornu. The original CIANNA project is available at
+https://github.com/Deyht/CIANNA and is released under the Apache-2.0 license.
 
-ORSDet-specific additions and modifications are noted in `NOTICE.md`. Changes
-to the bundled CIANNA source tree are summarized in `src/MODIFICATIONS.md`.
-The official SKAO SDC1 raw FITS/catalog files are not redistributed here; place
-them under `external_data/560Mhz-1kh/` or point `SDC1_RAW_DATA_DIR` to a local
-copy obtained under the applicable data terms.
+ORSDet adds the cleaned SDC1 oriented-source detection workflow, public
+train/test entry points, oriented-box target construction, detector integration,
+flux-head packaging, evaluation utilities, documentation, and released
+checkpoint.

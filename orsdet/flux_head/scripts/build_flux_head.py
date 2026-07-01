@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Train/package the V4m Stage9 head for one checkpoint.
+"""Train/package the ORSDet flux head head for one checkpoint.
 
-This is the formal checkpoint hook for V4m: detector bytes stay unchanged,
-Stage9 is trained from training-region post-NMS candidates, and both parts are
+This is the formal checkpoint hook for ORSDet flux head: detector bytes stay unchanged,
+flux head is trained from training-region post-NMS candidates, and both parts are
 packed into one .dat trailer artifact.
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from stage9_core import (
+from flux_head_core import (
     add_feature_expansion,
     build_geom_target_table_from_paths,
     feature_columns,
@@ -27,7 +27,7 @@ from stage9_core import (
 )
 from flux_common import EPS, read_catalog, rel_or_abs, require_file, write_catalog, write_json
 from flux_common import build_detector_feature_frame
-from dat_package import pack_v4m_dat, read_v4m_dat_info
+from dat_package import pack_flux_head_dat, read_flux_head_dat_info
 from score_utils import default_raw_data_dir, score_catalog, score_rows, score_summary_dict
 
 
@@ -63,7 +63,7 @@ def build_targets(args: argparse.Namespace) -> tuple[pd.DataFrame, pd.DataFrame,
         if len(filtered) >= 20:
             targets = filtered.copy()
     if len(targets) < 20:
-        raise RuntimeError("Too few Stage9 target rows after filtering: %d" % len(targets))
+        raise RuntimeError("Too few flux head target rows after filtering: %d" % len(targets))
 
     if "flux_base" not in targets.columns:
         if "log_flux_base" in targets.columns:
@@ -76,7 +76,7 @@ def build_targets(args: argparse.Namespace) -> tuple[pd.DataFrame, pd.DataFrame,
                 validate="one_to_one",
             )
         else:
-            raise KeyError("Stage9 targets need flux_base or log_flux_base for bright-gate weighting.")
+            raise KeyError("flux head targets need flux_base or log_flux_base for bright-gate weighting.")
     targets["flux_base"] = np.maximum(
         np.where(
             np.isfinite(targets["flux_base"].to_numpy(dtype=np.float64)),
@@ -95,8 +95,8 @@ def build_targets(args: argparse.Namespace) -> tuple[pd.DataFrame, pd.DataFrame,
         soft_weight=float(args.bright_soft_weight),
         hard_weight=float(args.bright_hard_weight),
     )
-    targets["stage7_gate_weight"] = gate_weight
-    targets["stage9_target_policy"] = "post_nms_candidate_geom_truth_with_bright_weight"
+    targets["bright_gate_weight"] = gate_weight
+    targets["flux_head_target_policy"] = "post_nms_candidate_geom_truth_with_bright_weight"
     targets["candidate_target_level"] = "post_nms_detection"
     targets["source_level_target"] = False
     return features, targets.reset_index(drop=True), audit
@@ -116,7 +116,7 @@ def write_model_package(
     package_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(model_path, package_dir / "fit_model.json")
     config = {
-        "format": "V4m Stage9 decoded-candidate checkpoint package",
+        "format": "ORSDet flux head decoded-candidate checkpoint package",
         "display": args.display,
         "epoch": int(args.epoch),
         "detector_path": str(args.detector.resolve()),
@@ -127,7 +127,7 @@ def write_model_package(
         "fit_model": "fit_model.json",
         "apply_entry": "scripts/apply_flux_head.py",
         "notes": (
-            "Detector bytes are unchanged. Stage9 is a detached decoded-candidate "
+            "Detector bytes are unchanged. flux head is a detached decoded-candidate "
             "flux head trained from training-region geometric truth pairs."
         ),
     }
@@ -136,9 +136,9 @@ def write_model_package(
         encoding="utf-8",
     )
     lines = [
-        f"# {args.display} V4m Stage9 单 `.dat` 包",
+        f"# {args.display} ORSDet flux head 单 `.dat` 包",
         "",
-        "该包由 checkpoint hook 生成：detector `.dat` 保持原始 bytes，Stage9 decoded-candidate head 作为 trailer payload 追加。",
+        "该包由 checkpoint hook 生成：detector `.dat` 保持原始 bytes，flux head decoded-candidate head 作为 trailer payload 追加。",
         "",
         f"- detector: `{rel_or_abs(args.detector)}`",
         f"- training catalog: `{rel_or_abs(args.train_catalog)}`",
@@ -147,7 +147,7 @@ def write_model_package(
         f"- apply pred_obb: `{rel_or_abs(args.apply_pred_obb)}`",
         f"- fit model: `{rel_or_abs(model_path)}`",
         "",
-        "注意：Stage9 是 checkpoint-integrated 二阶段测光头，不回传 detector。",
+        "注意：flux head 是 checkpoint-integrated 二阶段测光头，不回传 detector。",
         "",
     ]
     (package_dir / "MODEL_CARD_zh.md").write_text("\n".join(lines), encoding="utf-8")
@@ -157,11 +157,11 @@ def write_model_package(
 def write_report(path: Path, row: dict[str, object], metrics: dict[str, dict[str, float]], audit: pd.DataFrame) -> None:
     audit_row = audit.iloc[0] if len(audit) else pd.Series(dtype=object)
     lines = [
-        f"# {row['display']} V4m Stage9 checkpoint hook 结果",
+        f"# {row['display']} ORSDet flux head checkpoint hook 结果",
         "",
-        "本报告验证单 checkpoint 的正式 V4m Stage9 训练/打包流程。",
+        "本报告验证单 checkpoint 的正式 ORSDet flux head 训练/打包流程。",
         "训练输入来自 training-region post-NMS catalog/pred_obb；应用输入来自 full/eval catalog/pred_obb。",
-        "detector 权重不变，Stage9 head 写入单 `.dat` trailer。",
+        "detector 权重不变，flux head 写入单 `.dat` trailer。",
         "",
         "## 输入输出",
         "",
@@ -204,17 +204,17 @@ def write_report(path: Path, row: dict[str, object], metrics: dict[str, dict[str
                     row["base_b_min"],
                     row["base_pa"],
                 ),
-                "| stage9 | %.4f | %d | %d | %d | %.6f | %.6f | %.6f | %.6f | %.6f |"
+                "| flux_head | %.4f | %d | %d | %d | %.6f | %.6f | %.6f | %.6f | %.6f |"
                 % (
-                    row["stage9_score"],
-                    row["stage9_n_det"],
-                    row["stage9_n_match"],
-                    row["stage9_n_false"],
-                    row["stage9_purity"],
-                    row["stage9_flux"],
-                    row["stage9_b_maj"],
-                    row["stage9_b_min"],
-                    row["stage9_pa"],
+                    row["flux_head_score"],
+                    row["flux_head_n_det"],
+                    row["flux_head_n_match"],
+                    row["flux_head_n_false"],
+                    row["flux_head_purity"],
+                    row["flux_head_flux"],
+                    row["flux_head_b_maj"],
+                    row["flux_head_b_min"],
+                    row["flux_head_pa"],
                 ),
                 "",
                 "## 判断",
@@ -232,19 +232,19 @@ def run_hook(args: argparse.Namespace) -> dict[str, object]:
     if out_dir.exists() and args.force:
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    fit_dir = out_dir / "stage9_decoded_truth_head"
-    apply_dir = out_dir / "stage9_apply"
-    package_dir = out_dir / "model_package_stage9"
+    fit_dir = out_dir / "flux_head_decoded_truth_head"
+    apply_dir = out_dir / "flux_head_apply"
+    package_dir = out_dir / "model_package_flux_head"
     fit_dir.mkdir(parents=True, exist_ok=True)
     apply_dir.mkdir(parents=True, exist_ok=True)
 
     features, targets, audit = build_targets(args)
-    targets.to_csv(fit_dir / "stage9_candidate_targets.csv", index=False, float_format="%.10g")
-    audit.to_csv(fit_dir / "stage9_pairing_audit.csv", index=False)
+    targets.to_csv(fit_dir / "flux_head_candidate_targets.csv", index=False, float_format="%.10g")
+    audit.to_csv(fit_dir / "flux_head_pairing_audit.csv", index=False)
 
     features_expanded = add_feature_expansion(features)
     fit = features_expanded.merge(
-        targets[["det_id", "truth_id", "delta_log_truth", "pair_confidence", "stage7_gate_weight"]],
+        targets[["det_id", "truth_id", "delta_log_truth", "pair_confidence", "bright_gate_weight"]],
         on="det_id",
         how="inner",
         validate="one_to_one",
@@ -253,7 +253,7 @@ def run_hook(args: argparse.Namespace) -> dict[str, object]:
     y = fit["delta_log_truth"].to_numpy(dtype=np.float64)
     sample_weight = (
         fit["pair_confidence"].to_numpy(dtype=np.float64)
-        * fit["stage7_gate_weight"].to_numpy(dtype=np.float64)
+        * fit["bright_gate_weight"].to_numpy(dtype=np.float64)
     )
     sample_weight = np.where(np.isfinite(sample_weight) & (sample_weight > 0), sample_weight, 1.0)
     train_mask, valid_mask = split_by_det(
@@ -273,9 +273,9 @@ def run_hook(args: argparse.Namespace) -> dict[str, object]:
         {
             "target_col": "delta_log_truth",
             "target_source": "train_region_geometric_truth_pairs",
-            "feature_builder": "stage9_decoded_v1",
+            "feature_builder": "flux_head_decoded_geometry",
             "feature_expansion": True,
-            "training_stage": "V4m Stage9 checkpoint hook",
+            "training_stage": "ORSDet flux head checkpoint hook",
             "integration": "checkpoint_integrated_two_stage_head",
             "detector_path": str(args.detector.resolve()),
             "training_catalog_path": str(args.train_catalog.resolve()),
@@ -306,7 +306,7 @@ def run_hook(args: argparse.Namespace) -> dict[str, object]:
     write_json(fit_dir / "fit_model.json", model)
     write_json(fit_dir / "fit_metrics.json", metrics)
     fit.assign(delta_pred=pred_fit, sample_weight=sample_weight).to_csv(
-        fit_dir / "stage9_fit_rows.csv",
+        fit_dir / "flux_head_fit_rows.csv",
         index=False,
         float_format="%.10g",
     )
@@ -318,7 +318,7 @@ def run_hook(args: argparse.Namespace) -> dict[str, object]:
     out_catalog = apply_catalog.copy()
     flux_before = np.maximum(out_catalog["flux"].to_numpy(dtype=np.float64), EPS)
     out_catalog["flux"] = flux_before * np.exp(delta)
-    out_catalog_path = apply_dir / "catalog_v4m_post_head.txt"
+    out_catalog_path = apply_dir / "catalog_flux_head_post_head.txt"
     write_catalog(out_catalog_path, out_catalog)
     pd.DataFrame(
         {
@@ -330,10 +330,10 @@ def run_hook(args: argparse.Namespace) -> dict[str, object]:
     ).to_csv(apply_dir / "flux_corrections.csv", index=False, float_format="%.10g")
 
     package = write_model_package(package_dir=package_dir, model_path=fit_dir / "fit_model.json", args=args, force=args.force)
-    dat_path = args.out_dat.resolve() if args.out_dat else out_dir / ("v4m_stage9_net0_s%04d.dat" % int(args.epoch))
-    info = pack_v4m_dat(args.detector.resolve(), package, dat_path, force=bool(args.force))
+    dat_path = args.out_dat.resolve() if args.out_dat else out_dir / ("flux_head_net0_s%04d.dat" % int(args.epoch))
+    info = pack_flux_head_dat(args.detector.resolve(), package, dat_path, force=bool(args.force))
     if args.verify_dat:
-        read_v4m_dat_info(dat_path, verify=True)
+        read_flux_head_dat_info(dat_path, verify=True)
 
     row: dict[str, object] = {
         "display": args.display,
@@ -357,18 +357,18 @@ def run_hook(args: argparse.Namespace) -> dict[str, object]:
         before = score_summary_dict(score_catalog(args.apply_catalog.resolve(), args.truth_catalog.resolve(), train=False))
         after = score_summary_dict(score_catalog(out_catalog_path, args.truth_catalog.resolve(), train=False))
         score_rows(before, after).to_csv(apply_dir / "score_delta.csv", index=False)
-        pd.DataFrame([{"scheme": "base", **before}, {"scheme": "v4m_stage9", **after}]).to_csv(
+        pd.DataFrame([{"scheme": "base", **before}, {"scheme": "flux_head", **after}]).to_csv(
             apply_dir / "score_summary.csv",
             index=False,
         )
-        for prefix, score in (("base", before), ("stage9", after)):
+        for prefix, score in (("base", before), ("flux_head", after)):
             for key, value in score.items():
                 row[f"{prefix}_{key}"] = value
         row["delta_score"] = float(after["score"] - before["score"])
         row["delta_n_det"] = int(after["n_det"] - before["n_det"])
 
-    write_json(out_dir / "stage9_checkpoint_hook_report.json", row)
-    write_report(out_dir / "stage9_checkpoint_hook_report_zh.md", row, metrics, audit)
+    write_json(out_dir / "flux_head_checkpoint_hook_report.json", row)
+    write_report(out_dir / "flux_head_checkpoint_hook_report_zh.md", row, metrics, audit)
     print("Wrote", dat_path)
     print("Wrote", out_catalog_path)
     return row
@@ -399,7 +399,7 @@ def main() -> None:
     parser.add_argument("--bright-hard-delta", type=float, default=0.35)
     parser.add_argument("--bright-soft-weight", type=float, default=0.75)
     parser.add_argument("--bright-hard-weight", type=float, default=0.25)
-    parser.add_argument("--device", default="cpu", help="Accepted for eval hook compatibility; Stage9 ridge runs on CPU.")
+    parser.add_argument("--device", default="cpu", help="Accepted for eval hook compatibility; flux head ridge runs on CPU.")
     parser.add_argument("--score", action="store_true")
     parser.add_argument("--verify-dat", action="store_true")
     parser.add_argument("--force", action="store_true")

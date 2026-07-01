@@ -1,6 +1,6 @@
 """Small bridge helpers for a future native CIANNA angle head.
 
-The current V2 module is intentionally external to the C/CUDA YOLO layer.
+The current angle module is intentionally external to the C/CUDA YOLO layer.
 These helpers define the contract that the future CIANNA integration should
 use for its angle target channels and prediction decoding.
 """
@@ -16,7 +16,7 @@ from .angle_loss import AspectWeightConfig, angle_weight_from_aspect
 
 
 @dataclass(frozen=True)
-class V2AngleHeadSpec:
+class AngleHeadSpec:
     angle_channels: int = 2
     target_columns: tuple[str, ...] = ("cos_2theta", "sin_2theta", "angle_weight")
     prediction_columns: tuple[str, ...] = ("pred_cos_2theta", "pred_sin_2theta")

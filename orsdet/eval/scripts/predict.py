@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate fwd_res files from CIANNA checkpoints for V5 evaluation."""
+"""Generate fwd_res files from CIANNA checkpoints for evaluation."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ import sys
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-V5_DIR = SCRIPT_DIR.parent
-SKAO_DIR = V5_DIR.parent
-sys.path.insert(0, str(V5_DIR / "src"))
+EVAL_DIR = SCRIPT_DIR.parent
+SKAO_DIR = EVAL_DIR.parent
+sys.path.insert(0, str(EVAL_DIR / "src"))
 
 from orsdet_eval.runtime import (  # noqa: E402
     ALL_PROFILES,
-    DEFAULT_RUN_DIR,
     OBB_PROFILES,
+    ORSDET_PROFILE,
     available_epochs,
     configure_paths,
     default_run_dir,
@@ -27,13 +27,7 @@ from orsdet_eval.runtime import (  # noqa: E402
     expected_fwd_bytes,
     fwd_file_complete,
     set_cuda_device,
-    v4d_mode_for_profile,
-    v4e_mode_for_profile,
-    v4f_mode_for_profile,
-    v4g_mode_for_profile,
-    v4h_mode_for_profile,
-    v4i_base_for_profile,
-    v4i_mode_for_profile,
+    detector_mode_for_profile,
 )
 
 
@@ -60,7 +54,7 @@ def main():
     parser.add_argument(
         "--profile",
         choices=ALL_PROFILES,
-        default="v4a_obb",
+        default=ORSDET_PROFILE,
     )
     parser.add_argument("--latest", action="store_true", help="Only predict the latest checkpoint.")
     parser.add_argument("--epoch-start", type=int)
@@ -106,24 +100,7 @@ def main():
         return
 
     if args.profile in OBB_PROFILES:
-        if args.profile == "v4a_obb":
-            pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
-        elif args.profile == "v4b_obb_phys":
-            pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
-        elif v4f_mode_for_profile(args.profile) is not None:
-            pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
-        elif v4g_mode_for_profile(args.profile) is not None:
-            pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
-        elif v4h_mode_for_profile(args.profile) is not None:
-            pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
-        elif v4i_base_for_profile(args.profile) == "ecs":
-            pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
-        elif v4i_base_for_profile(args.profile) == "dsa":
-            pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
-        elif v4e_mode_for_profile(args.profile) is not None:
-            pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
-        else:
-            pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
+        pred_script = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
         if not pred_script.is_file():
             raise FileNotFoundError(pred_script)
         for epoch in missing:
@@ -136,24 +113,9 @@ def main():
                 "--batch-size",
                 str(args.batch_size),
             ]
-            v4d_mode = v4d_mode_for_profile(args.profile)
-            if v4d_mode is not None:
-                cmd.extend(["--slim-mode", v4d_mode])
-            v4e_mode = v4e_mode_for_profile(args.profile)
-            if v4e_mode is not None:
-                cmd.extend(["--slim-mode", v4e_mode])
-            v4f_mode = v4f_mode_for_profile(args.profile)
-            if v4f_mode is not None:
-                cmd.extend(["--slim-mode", v4f_mode])
-            v4g_mode = v4g_mode_for_profile(args.profile)
-            if v4g_mode is not None:
-                cmd.extend(["--slim-mode", v4g_mode])
-            v4h_mode = v4h_mode_for_profile(args.profile)
-            if v4h_mode is not None:
-                cmd.extend(["--slim-mode", v4h_mode])
-            v4i_mode = v4i_mode_for_profile(args.profile)
-            if v4i_mode is not None:
-                cmd.extend(["--slim-mode", v4i_mode])
+            detector_mode = detector_mode_for_profile(args.profile)
+            if detector_mode is not None:
+                cmd.extend(["--slim-mode", detector_mode])
             print(" ".join(cmd), flush=True)
             subprocess.check_call(cmd)
         return

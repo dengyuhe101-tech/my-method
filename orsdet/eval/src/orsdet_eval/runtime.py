@@ -14,7 +14,7 @@ ORSDET_DIR = EVAL_DIR.parent
 ROOT_DIR = ORSDET_DIR.parent
 CIANNA_DIR = ROOT_DIR / "src"
 
-ORSDET_PROFILE = "v4m_stage9_v4d_sa_v1a_obb_phys"
+ORSDET_PROFILE = "flux_head_shared_angle_target_source_obb_phys"
 DEFAULT_ORSDET_RUN_DIR = ORSDET_DIR / "flux_head" / "outputs" / "orsdet"
 DEFAULT_ORSDET_OUT_DIR = EVAL_DIR / "outputs" / "orsdet_eval"
 DEFAULT_CIANNA_RUN_DIR = ORSDET_DIR / "run_hbb"
@@ -172,39 +172,11 @@ def available_epochs(
     return sorted(set(epochs))
 
 
-def v4d_mode_for_profile(profile: str) -> str | None:
-    return "v4d_sa" if profile == ORSDET_PROFILE else None
+def detector_mode_for_profile(profile: str) -> str | None:
+    return "shared_angle" if profile == ORSDET_PROFILE else None
 
 
-def v4e_mode_for_profile(profile: str) -> str | None:
-    return None
-
-
-def v4f_mode_for_profile(profile: str) -> str | None:
-    return None
-
-
-def v4g_mode_for_profile(profile: str) -> str | None:
-    return None
-
-
-def v4h_mode_for_profile(profile: str) -> str | None:
-    return None
-
-
-def v4i_base_for_profile(profile: str) -> str | None:
-    return None
-
-
-def v4i_mode_for_profile(profile: str) -> str | None:
-    return None
-
-
-def v4i_flux_decode_mode_for_profile(profile: str) -> str | None:
-    return None
-
-
-def is_v4m_stage9_profile(profile: str) -> bool:
+def is_flux_head_profile(profile: str) -> bool:
     return profile == ORSDET_PROFILE
 
 
@@ -214,9 +186,9 @@ def expected_fwd_bytes(aux_module, profile: str = "cianna_hbb") -> int:
     nb_aux = aux_module.nb_param
     if profile == ORSDET_PROFILE:
         try:
-            from orsdet_detector import v4d_layout
+            from orsdet_detector import detector_layout
 
-            nb_aux = v4d_layout("v4d_sa").total_aux
+            nb_aux = detector_layout("shared_angle").total_aux
         except Exception:
             nb_aux = 5
     n_float = (

@@ -1,4 +1,4 @@
-"""Rotated NMS helpers for V3."""
+"""Rotated NMS helpers for rotated NMS."""
 
 from __future__ import annotations
 

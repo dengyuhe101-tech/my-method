@@ -1,4 +1,4 @@
-"""Scoring, summary, and matched-error helpers for V5."""
+"""Scoring, summary, and matched-error helpers for evaluation."""
 
 from __future__ import annotations
 
@@ -165,7 +165,7 @@ def write_score_summary(path: Path, results: list[ScoreResult]) -> ScoreResult:
     best = max(ordered, key=lambda item: item.score)
 
     lines = []
-    lines.append("V5 Score Summary")
+    lines.append("evaluation Score Summary")
     lines.append("=" * 80)
     lines.append("")
     lines.append("Best epoch")

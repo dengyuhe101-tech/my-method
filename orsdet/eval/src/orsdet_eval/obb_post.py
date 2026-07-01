@@ -1,4 +1,4 @@
-"""V4a OBB post-processing summary helpers for V5."""
+"""OBB OBB post-processing summary helpers for evaluation."""
 
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ def _move_if_needed(src: Path, dst: Path) -> Path:
 
 
 def organize_obb_epoch(out_dir: Path, epoch: int) -> None:
-    """Move V4a flat epoch files into the V5 OBB output layout."""
+    """Move OBB flat epoch files into the evaluation OBB output layout."""
     ensure_obb_layout(out_dir)
     c_path = _move_if_needed(out_dir / ("catalog_sdc1_%04d.txt" % epoch), catalog_path(out_dir, epoch))
     p_path = _move_if_needed(out_dir / ("pred_obb_%04d.csv" % epoch), pred_obb_path(out_dir, epoch))
@@ -221,7 +221,7 @@ def summarize_obb_outputs(
     train_score: bool = False,
     diagnostic_epoch: int | None = None,
 ):
-    """Rescore V4a OBB catalogs and write V5-style summary files."""
+    """Rescore OBB OBB catalogs and write evaluation-style summary files."""
     ensure_obb_layout(out_dir)
     results = []
     scorer_by_epoch = {}

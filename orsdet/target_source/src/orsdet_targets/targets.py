@@ -44,7 +44,7 @@ DEFAULT_LOCAL_RAW_DATA_DIR = CIANNA_NEW_ROOT / "raw_data"
 DEFAULT_PIXEL_SIZE_DEG = 0.000167847
 DEFAULT_MIN_SIDE_PIX = 5.0
 DEFAULT_SIDE_CLIP = (5.0, None)
-DEFAULT_LEGACY_V1_SIDE_CLIP = (5.0, 64.0)
+DEFAULT_LEGACY_geometry_SIDE_CLIP = (5.0, 64.0)
 DEFAULT_VISIBILITY_THRESHOLD_JY_BEAM = None
 DEFAULT_GAUSSIAN_CONTOUR_PEAK_FRACTION = 1.0 / 16.0
 DEFAULT_EXPONENTIAL_RADIUS_SCALE = 1.6783469900166605
@@ -56,7 +56,7 @@ DEFAULT_COMPLEX_CONTOUR_PEAK_FRACTION = DEFAULT_EXPONENTIAL_CONTOUR_PEAK_FRACTIO
 DEFAULT_COMPLEX_SIZE_TYPE_MIN = 3.0
 DEFAULT_ELONGATED_ASPECT_MIN = 4.0
 DEFAULT_ELONGATED_BMAJ_MIN_ARCSEC = 10.0
-SIZE_POLICY_LAS_V1 = 0.0
+SIZE_POLICY_LAS_geometry = 0.0
 SIZE_POLICY_GAUSSIAN = 1.0
 SIZE_POLICY_EXPONENTIAL = 2.0
 DEFAULT_BEAM_MODEL = BeamModel(major_arcsec=1.5, minor_arcsec=1.5, pa_deg=0.0)
@@ -313,12 +313,11 @@ def adaptive_contour_peak_fraction(
     elongated_aspect_min: float = DEFAULT_ELONGATED_ASPECT_MIN,
     elongated_bmaj_min_arcsec: float = DEFAULT_ELONGATED_BMAJ_MIN_ARCSEC,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Return historical Version D contour fractions and diagnostic group ids.
+    """Return adaptive contour fractions and diagnostic group ids.
 
-    The current default target builder no longer calls this helper; Version E
-    uses `_size_aware_source_boxes` so the source groups directly follow
-    catalog SIZE semantics. This function is kept for old experiments that
-    explicitly want the pre-Version-E adaptive Gaussian envelope.
+    The default target builder uses `_size_aware_source_boxes` so the source
+    groups directly follow catalog SIZE semantics. This helper remains
+    available for runs that explicitly want the adaptive Gaussian envelope.
 
     Group ids:
         0 = ordinary source, base contour
@@ -372,30 +371,30 @@ def _size_aware_source_boxes(
     beam_model: BeamModel,
     model: EnvelopeModelConfig,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Build V1a boxes using source-type-specific size semantics.
+    """Build target-source boxes using source-type-specific size semantics.
 
-    SIZE=1 LAS keeps the legacy V1 box exactly. SIZE=2 Gaussian uses a
+    SIZE=1 LAS keeps the geometry box exactly. SIZE=2 Gaussian uses a
     beam-convolved 2-FWHM contour. SIZE=3 Exponential uses the half-light
     exponential radius to thicken the short axis while capping the long axis
-    at the V1 long side.
+    at the geometry long side.
     """
 
     n_sources = catalog.shape[0]
     las_mask, gaussian_mask, exponential_mask = _size_type_masks(catalog)
 
-    legacy_v1_boxes = source_params_to_le90_box(
+    legacy_geometry_boxes = source_params_to_le90_box(
         x_pix,
         y_pix,
         catalog[:, 7],
         catalog[:, 8],
         catalog[:, 9],
         pixel_size_deg=pixel_size_deg,
-        side_clip=DEFAULT_LEGACY_V1_SIDE_CLIP,
+        side_clip=DEFAULT_LEGACY_geometry_SIDE_CLIP,
     )
-    boxes = legacy_v1_boxes.copy()
+    boxes = legacy_geometry_boxes.copy()
     contour_fraction = np.zeros(n_sources, dtype=np.float64)
     policy_group = np.full(n_sources, SIZE_POLICY_GAUSSIAN, dtype=np.float64)
-    policy_group[las_mask] = SIZE_POLICY_LAS_V1
+    policy_group[las_mask] = SIZE_POLICY_LAS_geometry
     policy_group[exponential_mask] = SIZE_POLICY_EXPONENTIAL
 
     gaussian_fraction = _broadcast_source_value(
@@ -442,18 +441,18 @@ def _size_aware_source_boxes(
             diameter_scale=2.0 * DEFAULT_EXPONENTIAL_RADIUS_SCALE,
             side_clip=(min_side_pix, None),
         )
-        v1_exp = legacy_v1_boxes[exponential_mask]
-        long_cap = DEFAULT_EXPONENTIAL_LONG_CAP_FACTOR * v1_exp[:, 2]
+        geometry_exp = legacy_geometry_boxes[exponential_mask]
+        long_cap = DEFAULT_EXPONENTIAL_LONG_CAP_FACTOR * geometry_exp[:, 2]
         new_w = np.minimum(exp_boxes[:, 2], long_cap)
-        new_w = np.maximum(new_w, v1_exp[:, 2])
-        new_h = np.maximum(v1_exp[:, 3], exp_boxes[:, 3])
+        new_w = np.maximum(new_w, geometry_exp[:, 2])
+        new_h = np.maximum(geometry_exp[:, 3], exp_boxes[:, 3])
         new_h = np.minimum(new_h, new_w)
         cx, cy, w, h, theta = canonicalize_le90(
-            v1_exp[:, 0],
-            v1_exp[:, 1],
+            geometry_exp[:, 0],
+            geometry_exp[:, 1],
             new_w,
             new_h,
-            v1_exp[:, 4],
+            geometry_exp[:, 4],
         )
         boxes[exponential_mask] = np.stack([cx, cy, w, h, theta], axis=-1)
 
@@ -473,8 +472,8 @@ def catalog_to_rotated_source_table(
 ) -> RotatedSourceTable:
     """Convert a SDC1 source catalog to a le90 OBB source table.
 
-    V1a defaults to a size-aware model-derived target. Set
-    `use_envelope_model=False` to recover the V1 direct `2 * BMAJ/BMIN` rule.
+    target-source defaults to a size-aware model-derived target. Set
+    `use_envelope_model=False` to recover the geometry direct `2 * BMAJ/BMIN` rule.
     """
 
     catalog = np.asarray(catalog, dtype=np.float64)
@@ -690,7 +689,7 @@ def summarize_table(table: RotatedSourceTable) -> Dict[str, float]:
         groups = table.col("adaptive_source_group")
         summary.update(
             {
-                "policy_las_v1_count": float(np.sum(groups == SIZE_POLICY_LAS_V1)),
+                "policy_las_geometry_count": float(np.sum(groups == SIZE_POLICY_LAS_geometry)),
                 "policy_gaussian_count": float(np.sum(groups == SIZE_POLICY_GAUSSIAN)),
                 "policy_exponential_count": float(np.sum(groups == SIZE_POLICY_EXPONENTIAL)),
             }

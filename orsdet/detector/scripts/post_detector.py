@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Post-process V4d predictions with OBB NMS and physical SDC1 shape output."""
+"""Post-process detector predictions with OBB NMS and physical SDC1 shape output."""
 
 from __future__ import annotations
 
@@ -80,25 +80,25 @@ except ImportError:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-V4D_DIR = SCRIPT_DIR.parent
-SKAO_DIR = V4D_DIR.parent
-V3_DIR = SKAO_DIR / "nms"
-V25_DIR = SKAO_DIR / "candidates"
-sys.path.insert(0, str(V4D_DIR / "src"))
-sys.path.insert(0, str(V3_DIR / "src"))
-sys.path.insert(0, str(V25_DIR / "src"))
+DETECTOR_DIR = SCRIPT_DIR.parent
+SKAO_DIR = DETECTOR_DIR.parent
+NMS_DIR = SKAO_DIR / "nms"
+CANDIDATE_DIR = SKAO_DIR / "candidates"
+sys.path.insert(0, str(DETECTOR_DIR / "src"))
+sys.path.insert(0, str(NMS_DIR / "src"))
+sys.path.insert(0, str(CANDIDATE_DIR / "src"))
 sys.path.insert(0, str(SKAO_DIR / "angle" / "src"))
 sys.path.insert(0, str(SKAO_DIR / "target_source" / "src"))
 sys.path.insert(0, str(SKAO_DIR / "geometry" / "src"))
 sys.path.insert(0, str(SKAO_DIR))
 
-from orsdet_detector import DEFAULT_RUN_DIR, V4D_NB_PARAM, V4D_TOTAL_AUX, configure_paths as configure_v4d_paths
-from orsdet_detector import decode_rows_obb, normalize_slim_mode, v4d_catalog_arrays, v4d_layout
+from orsdet_detector import DEFAULT_RUN_DIR, DETECTOR_NB_PARAM, DETECTOR_TOTAL_AUX, configure_paths as configure_detector_paths
+from orsdet_detector import decode_rows_obb, normalize_slim_mode, detector_catalog_arrays, detector_layout
 
 
-DEFAULT_OUT_DIR = DEFAULT_RUN_DIR / "v3_post"
-CURRENT_TOTAL_AUX = V4D_TOTAL_AUX
-CURRENT_NB_PARAM = V4D_NB_PARAM
+DEFAULT_OUT_DIR = DEFAULT_RUN_DIR / "post"
+CURRENT_TOTAL_AUX = DETECTOR_TOTAL_AUX
+CURRENT_NB_PARAM = DETECTOR_NB_PARAM
 CANDIDATE_ORIGIN_COLUMNS = (
     "tile_y",
     "tile_x",
@@ -184,7 +184,7 @@ def read_run_slim_mode(run_dir: Path) -> str | None:
 
 
 @jit(nopython=True, fastmath=False)
-def tile_filter_v4b(c_pred, c_box, c_tile, nb_box, nb_aux, prob_obj_cases, patch, val_med_lim, val_med_obj, hist_count):
+def tile_filter_candidates(c_pred, c_box, c_tile, nb_box, nb_aux, prob_obj_cases, patch, val_med_lim, val_med_obj, hist_count):
     c_nb_box = 0
     for i in range(0, yolo_nb_reg):
         for j in range(0, yolo_nb_reg):
@@ -554,7 +554,7 @@ def build_candidate_cache(
             c_box[:] = 0.0
             patch[:, :] = full_data_norm[ymin:ymax, xmin:xmax]
             c_pred = predict_getter(ph, pw)
-            c_nb_box = tile_filter_v4b(
+            c_nb_box = tile_filter_candidates(
                 c_pred,
                 c_box,
                 c_tile,
@@ -693,23 +693,17 @@ def main():
         "--slim-mode",
         default=None,
         choices=(
-            "v4d_s",
-            "v4d-sa",
-            "v4d_sa",
             "size",
+            "shared_angle",
             "size-angle",
             "size_angle",
-            "v4i_dsa",
-            "v4d_sa_flux_refine",
-            "v4m_native_dsa",
-            "v4m_native",
-            "native_flux_head",
-            "v4k_dsa",
-            "v4d_sa_flux_calib_gate",
             "flux_refine",
+            "shared_angle_flux_refine",
+            "native_flux_head",
             "flux_calib_gate",
+            "shared_angle_flux_calib_gate",
         ),
-        help="V4d branch. Defaults to run_info.txt slim_mode, then v4d_s.",
+        help="detector branch. Defaults to run_info.txt slim_mode, then size.",
     )
     parser.add_argument(
         "--flux-decode-mode",
@@ -768,7 +762,7 @@ def main():
     parser.set_defaults(skip_intermediate_pred_obb=True, early_stop_on_threshold_convergence=True)
     args = parser.parse_args()
 
-    configure_v4d_paths()
+    configure_detector_paths()
     install_numba_fallback_if_needed()
 
     import data_gen as dg
@@ -776,8 +770,8 @@ def main():
 
     src_run_dir = args.src_run_dir.resolve()
     out_dir = args.out_dir.resolve()
-    slim_mode = normalize_slim_mode(args.slim_mode or read_run_slim_mode(src_run_dir) or "v4d_s")
-    layout = v4d_layout(slim_mode)
+    slim_mode = normalize_slim_mode(args.slim_mode or read_run_slim_mode(src_run_dir) or "size")
+    layout = detector_layout(slim_mode)
     global CURRENT_NB_PARAM, CURRENT_TOTAL_AUX
     CURRENT_TOTAL_AUX = layout.total_aux
     CURRENT_NB_PARAM = layout.nb_param
@@ -786,7 +780,7 @@ def main():
     (out_dir / "fwd_res").mkdir(exist_ok=True)
     print("Using source run directory:", src_run_dir)
     print("Using output directory:", out_dir)
-    print("Using V4d slim mode:", layout.mode)
+    print("Using detector slim mode:", layout.mode)
     print("Using flux decode mode:", args.flux_decode_mode)
 
     os.chdir(src_run_dir)
@@ -973,7 +967,7 @@ def main():
 
         cls = utils.pixel_to_skycoord(x_y_flat_kept[:, 0], x_y_flat_kept[:, 1], wcs_img)
         ra_dec_coords = np.array([cls.ra.deg, cls.dec.deg])
-        obb_info = v4d_catalog_arrays(
+        obb_info = detector_catalog_arrays(
             flat_kept_scaled,
             lims,
             pixel_size,
@@ -1150,7 +1144,7 @@ def main():
             ensure_candidate_cache(predict_getter, float(np.min(prob_obj_cases)))
             result = run_round(candidate_rows_grid, candidate_boxes_grid, prob_obj_cases, load_epoch, write_pred_obb=write_pred_obb)
             if result["empty"]:
-                print("Warning: no detections kept after V3 NMS for epoch %d" % load_epoch)
+                print("Warning: no detections kept after rotated NMS NMS for epoch %d" % load_epoch)
                 write_empty_outputs(out_dir, load_epoch)
                 score = 0.0
                 scorer = None

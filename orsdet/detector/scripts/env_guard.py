@@ -1,4 +1,4 @@
-"""Runtime environment guard for V4d scripts.
+"""Runtime environment guard for detector scripts.
 
 CIANNA4090 keeps the compatible NumPy inside the conda environment. Some lab
 shells still add ~/.local site-packages ahead of the env, which can import a

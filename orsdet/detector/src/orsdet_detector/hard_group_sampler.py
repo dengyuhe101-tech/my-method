@@ -1,4 +1,4 @@
-"""Hard-group source sampler for V4d training.
+"""Hard-group source sampler for detector training.
 
 The design follows the balanced-learning idea from Libra R-CNN: if the model
 fails on distribution tails, make the sampler explicitly expose those tails
@@ -37,12 +37,12 @@ class HardGroupSampler:
         flux = np.asarray(b.flux_norm, dtype=np.float64)
         size = np.sqrt(
             np.maximum(
-                np.asarray(b.v1_table["w_pix"], dtype=np.float64)
-                * np.asarray(b.v1_table["h_pix"], dtype=np.float64),
+                np.asarray(b.source_table["w_pix"], dtype=np.float64)
+                * np.asarray(b.source_table["h_pix"], dtype=np.float64),
                 0.0,
             )
         )
-        aspect = np.asarray(b.v1_table["aspect_ratio"], dtype=np.float64)
+        aspect = np.asarray(b.source_table["aspect_ratio"], dtype=np.float64)
         x = np.asarray(b.boxes_global[:, 0], dtype=np.float64)
         y = np.asarray(b.boxes_global[:, 1], dtype=np.float64)
         q_flux = np.nanquantile(flux, [1.0 / 3.0, 2.0 / 3.0])

@@ -1,11 +1,10 @@
-"""Decoding helpers for V4d slim OBB layouts.
+"""Decoding helpers for detector OBB layouts.
 
-V4d removes the duplicated PARAM_OBB_W/H heads from V4b. The OBB width and
-height used for RotIoU, NMS and catalog diagnostics are the native YOLO size
-branch (`x2-x1`, `y2-y1`). Two experiment layouts are supported:
+The OBB width and height used for RotIoU, NMS and catalog diagnostics are the
+native YOLO size branch (`x2-x1`, `y2-y1`). The public layouts are:
 
-- v4d_s:  parameters = flux, phys_bmaj, phys_bmin; angles = OBB theta + PA.
-- v4d_sa: parameters = flux, phys_bmaj, phys_bmin; angles = shared theta/PA.
+- size:  parameters = flux, phys_bmaj, phys_bmin; angles = OBB theta + PA.
+- shared_angle: parameters = flux, phys_bmaj, phys_bmin; angles = shared theta/PA.
 """
 
 from __future__ import annotations
@@ -19,19 +18,19 @@ from orsdet_angle.angle_codec import decode_angle_vector
 from orsdet_candidates.decode import denorm_log_value, pix_to_arcsec
 
 
-V4D_MODE_SIZE = "v4d_s"
-V4D_MODE_SIZE_ANGLE = "v4d_sa"
-V4D_MODE_FLUX_REFINE_SIZE_ANGLE = "v4i_dsa"
-V4D_MODE_V4M_NATIVE_SIZE_ANGLE = "v4m_native_dsa"
-V4D_MODE_FLUX_CALIB_GATE_SIZE_ANGLE = "v4k_dsa"
-V4D_MODES = (
-    V4D_MODE_SIZE,
-    V4D_MODE_SIZE_ANGLE,
-    V4D_MODE_FLUX_REFINE_SIZE_ANGLE,
-    V4D_MODE_V4M_NATIVE_SIZE_ANGLE,
-    V4D_MODE_FLUX_CALIB_GATE_SIZE_ANGLE,
+DETECTOR_MODE_SIZE = "size"
+DETECTOR_MODE_SHARED_ANGLE = "shared_angle"
+DETECTOR_MODE_FLUX_REFINE = "flux_refine"
+DETECTOR_MODE_NATIVE_FLUX_HEAD = "native_flux_head"
+DETECTOR_MODE_FLUX_CALIB_GATE = "flux_calib_gate"
+DETECTOR_MODES = (
+    DETECTOR_MODE_SIZE,
+    DETECTOR_MODE_SHARED_ANGLE,
+    DETECTOR_MODE_FLUX_REFINE,
+    DETECTOR_MODE_NATIVE_FLUX_HEAD,
+    DETECTOR_MODE_FLUX_CALIB_GATE,
 )
-V4D_DEFAULT_MODE = V4D_MODE_SIZE
+DETECTOR_DEFAULT_MODE = DETECTOR_MODE_SIZE
 
 PARAM_FLUX = 0
 PARAM_PHYS_BMAJ = 1
@@ -61,7 +60,7 @@ FLUX_DECODE_MODES = (
 
 
 @dataclass(frozen=True)
-class V4DLayout:
+class DetectorLayout:
     mode: str
     nb_param: int
     nb_angle: int
@@ -76,42 +75,36 @@ class V4DLayout:
 
 
 def normalize_slim_mode(mode: str | None) -> str:
-    text = (mode or V4D_DEFAULT_MODE).strip().lower().replace("-", "_")
+    text = (mode or DETECTOR_DEFAULT_MODE).strip().lower().replace("-", "_")
     aliases = {
-        "s": V4D_MODE_SIZE,
-        "size": V4D_MODE_SIZE,
-        "size_only": V4D_MODE_SIZE,
-        "v4d_s": V4D_MODE_SIZE,
-        "sa": V4D_MODE_SIZE_ANGLE,
-        "size_angle": V4D_MODE_SIZE_ANGLE,
-        "shared_angle": V4D_MODE_SIZE_ANGLE,
-        "v4d_sa": V4D_MODE_SIZE_ANGLE,
-        "v4i_dsa": V4D_MODE_FLUX_REFINE_SIZE_ANGLE,
-        "v4d_sa_flux_refine": V4D_MODE_FLUX_REFINE_SIZE_ANGLE,
-        "flux_refine": V4D_MODE_FLUX_REFINE_SIZE_ANGLE,
-        "v4m_native_dsa": V4D_MODE_V4M_NATIVE_SIZE_ANGLE,
-        "v4m_native": V4D_MODE_V4M_NATIVE_SIZE_ANGLE,
-        "native_flux_head": V4D_MODE_V4M_NATIVE_SIZE_ANGLE,
-        "v4k_dsa": V4D_MODE_FLUX_CALIB_GATE_SIZE_ANGLE,
-        "v4d_sa_flux_calib_gate": V4D_MODE_FLUX_CALIB_GATE_SIZE_ANGLE,
-        "flux_calib_gate": V4D_MODE_FLUX_CALIB_GATE_SIZE_ANGLE,
+        "s": DETECTOR_MODE_SIZE,
+        "size": DETECTOR_MODE_SIZE,
+        "size_only": DETECTOR_MODE_SIZE,
+        "sa": DETECTOR_MODE_SHARED_ANGLE,
+        "size_angle": DETECTOR_MODE_SHARED_ANGLE,
+        "shared_angle": DETECTOR_MODE_SHARED_ANGLE,
+        "flux_refine": DETECTOR_MODE_FLUX_REFINE,
+        "shared_angle_flux_refine": DETECTOR_MODE_FLUX_REFINE,
+        "native_flux_head": DETECTOR_MODE_NATIVE_FLUX_HEAD,
+        "flux_calib_gate": DETECTOR_MODE_FLUX_CALIB_GATE,
+        "shared_angle_flux_calib_gate": DETECTOR_MODE_FLUX_CALIB_GATE,
     }
     if text in aliases:
         return aliases[text]
-    raise ValueError("Unsupported V4d slim mode: %s" % mode)
+    raise ValueError("Unsupported detector layout mode: %s" % mode)
 
 
-def v4d_layout(mode: str | None = None) -> V4DLayout:
+def detector_layout(mode: str | None = None) -> DetectorLayout:
     slim_mode = normalize_slim_mode(mode)
-    if slim_mode == V4D_MODE_FLUX_CALIB_GATE_SIZE_ANGLE:
+    if slim_mode == DETECTOR_MODE_FLUX_CALIB_GATE:
         nb_param = 5
-    elif slim_mode in (V4D_MODE_FLUX_REFINE_SIZE_ANGLE, V4D_MODE_V4M_NATIVE_SIZE_ANGLE):
+    elif slim_mode in (DETECTOR_MODE_FLUX_REFINE, DETECTOR_MODE_NATIVE_FLUX_HEAD):
         nb_param = 4
     else:
         nb_param = 3
-    nb_angle = 4 if slim_mode == V4D_MODE_SIZE else 2
+    nb_angle = 4 if slim_mode == DETECTOR_MODE_SIZE else 2
     target_stride = 7 + nb_param + nb_angle + 1
-    return V4DLayout(
+    return DetectorLayout(
         mode=slim_mode,
         nb_param=nb_param,
         nb_angle=nb_angle,
@@ -119,20 +112,20 @@ def v4d_layout(mode: str | None = None) -> V4DLayout:
         total_aux=nb_param + nb_angle,
         row_angle_start=ROW_PARAM_START + nb_param,
         angle_phys_pa_start=(
-            ANGLE_PHYS_PA_START_SIZE if slim_mode == V4D_MODE_SIZE else ANGLE_PHYS_PA_START_SIZE_ANGLE
+            ANGLE_PHYS_PA_START_SIZE if slim_mode == DETECTOR_MODE_SIZE else ANGLE_PHYS_PA_START_SIZE_ANGLE
         ),
     )
 
 
-# Backward-simple constants for the default V4d-S branch.
-V4D_NB_PARAM = v4d_layout().nb_param
-V4D_NB_ANGLE = v4d_layout().nb_angle
-V4D_TARGET_STRIDE = v4d_layout().target_stride
-V4D_TOTAL_AUX = v4d_layout().total_aux
+# Constants for the default detector size branch.
+DETECTOR_NB_PARAM = detector_layout().nb_param
+DETECTOR_NB_ANGLE = detector_layout().nb_angle
+DETECTOR_TARGET_STRIDE = detector_layout().target_stride
+DETECTOR_TOTAL_AUX = detector_layout().total_aux
 
 
-def v4d_target_dim(max_nb_obj_per_image: int, mode: str | None = None) -> int:
-    return 1 + int(max_nb_obj_per_image) * v4d_layout(mode).target_stride
+def detector_target_dim(max_nb_obj_per_image: int, mode: str | None = None) -> int:
+    return 1 + int(max_nb_obj_per_image) * detector_layout(mode).target_stride
 
 
 def normalize_flux_decode_mode(mode: str | None) -> str:
@@ -210,7 +203,7 @@ def decode_rows_obb(rows, lims=None, mode: str | None = None):
     """Decode local post-process rows to OBBs for rotated NMS."""
 
     del lims
-    layout = v4d_layout(mode)
+    layout = detector_layout(mode)
     rows = np.asarray(rows, dtype=np.float64)
     if rows.size == 0:
         return np.zeros((0, 5), dtype=np.float64)
@@ -219,10 +212,10 @@ def decode_rows_obb(rows, lims=None, mode: str | None = None):
 
 
 def decode_target_box(block, lims=None, mode: str | None = None):
-    """Decode one V4d target block to an OBB."""
+    """Decode one detector target block to an OBB."""
 
     del lims
-    layout = v4d_layout(mode)
+    layout = detector_layout(mode)
     block = np.asarray(block, dtype=np.float64)
     rows = np.asarray([[block[1], block[2], block[4], block[5]]], dtype=np.float64)
     angle_vectors = np.asarray(
@@ -232,7 +225,7 @@ def decode_target_box(block, lims=None, mode: str | None = None):
     return _native_obb_from_rows(rows, angle_vectors)[0]
 
 
-def v4d_catalog_arrays(
+def detector_catalog_arrays(
     flat_boxes,
     lims,
     pixel_size_deg: float,
@@ -242,7 +235,7 @@ def v4d_catalog_arrays(
 ):
     """Decode final post-NMS rows for SDC1 catalog writing."""
 
-    layout = v4d_layout(mode)
+    layout = detector_layout(mode)
     flat_boxes = np.asarray(flat_boxes, dtype=np.float64)
     obb = decode_rows_obb(flat_boxes, lims, layout.mode)
     corners = xywhtheta_to_corners(obb)

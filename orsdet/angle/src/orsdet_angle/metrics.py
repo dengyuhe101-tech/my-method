@@ -230,7 +230,7 @@ def write_prediction_csv(metrics: PredictionMetrics, path) -> None:
 
 def format_summary_text(summaries: List[Dict[str, float | str]]) -> str:
     lines = []
-    lines.append("V2 angle prediction grouped summary")
+    lines.append("angle angle prediction grouped summary")
     lines.append("")
     lines.append(
         "%-15s %-28s %8s %10s %10s %10s %10s %10s"

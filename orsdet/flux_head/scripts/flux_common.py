@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared paths and helpers for V4m Stage9 flux head."""
+"""Shared paths and helpers for the ORSDet flux head."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import pandas as pd
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-V4M_DIR = SCRIPT_DIR.parent
-SKAO_DIR = V4M_DIR.parent
+FLUX_HEAD_DIR = SCRIPT_DIR.parent
+SKAO_DIR = FLUX_HEAD_DIR.parent
 REPO_DIR = SKAO_DIR.parents[1]
 EPS = 1.0e-12
 CATALOG_COLUMNS = [
@@ -54,7 +54,7 @@ FEATURE_COLUMNS = [
     "cx_pix",
     "cy_pix",
 ]
-STAGE9_EXPANSION_COLUMNS = [
+FLUX_HEAD_EXPANSION_COLUMNS = [
     "log_flux_sq",
     "score_proxy_sq",
     "log_area_sq",
@@ -70,7 +70,7 @@ STAGE9_EXPANSION_COLUMNS = [
 
 
 class NumpyRidge:
-    """Small weighted ridge helper used by the detached Stage9/geom heads."""
+    """Small weighted ridge helper used by the detached flux head/geom heads."""
 
     def __init__(self, *, alpha: float = 1.0) -> None:
         self.alpha = float(alpha)
@@ -281,7 +281,7 @@ def build_detector_feature_frame(catalog: pd.DataFrame, pred: pd.DataFrame) -> p
     )
 
 
-def add_stage9_feature_expansion(feature_frame: pd.DataFrame, *, nb_prior: int = 9) -> pd.DataFrame:
+def add_flux_head_feature_expansion(feature_frame: pd.DataFrame, *, nb_prior: int = 9) -> pd.DataFrame:
     out = feature_frame.copy()
     log_flux = out["log_flux_base"].to_numpy(dtype=np.float64)
     score = out["score_proxy"].to_numpy(dtype=np.float64)
@@ -314,9 +314,9 @@ def add_stage9_feature_expansion(feature_frame: pd.DataFrame, *, nb_prior: int =
 def predict_delta_from_model(feature_frame: pd.DataFrame, model: dict[str, object]) -> np.ndarray:
     columns = [str(col) for col in model["columns"]]
     frame = feature_frame
-    needs_stage9 = bool(model.get("feature_expansion")) or str(model.get("feature_builder", "")).startswith("stage9")
-    if needs_stage9:
-        frame = add_stage9_feature_expansion(frame)
+    needs_flux_head = bool(model.get("feature_expansion")) or str(model.get("feature_builder", "")).startswith("flux_head")
+    if needs_flux_head:
+        frame = add_flux_head_feature_expansion(frame)
     missing = [col for col in columns if col not in frame.columns]
     if missing:
         raise KeyError("Feature frame is missing model columns: %s" % ", ".join(missing[:20]))

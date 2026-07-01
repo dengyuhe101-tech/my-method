@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train V4d with one native OBB size branch and physical shape heads."""
+"""Train detector with one native OBB size branch and physical shape heads."""
 
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ import numpy as np
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-V4D_DIR = SCRIPT_DIR.parent
-SKAO_DIR = V4D_DIR.parent
-sys.path.insert(0, str(V4D_DIR / "src"))
+DETECTOR_DIR = SCRIPT_DIR.parent
+SKAO_DIR = DETECTOR_DIR.parent
+sys.path.insert(0, str(DETECTOR_DIR / "src"))
 sys.path.insert(0, str(SKAO_DIR / "candidates" / "src"))
 sys.path.insert(0, str(SKAO_DIR / "angle" / "src"))
 sys.path.insert(0, str(SKAO_DIR / "target_source" / "src"))
@@ -70,9 +70,9 @@ def main():
     from orsdet_detector import (
         DEFAULT_TARGET_SOURCE,
         HardGroupSamplerConfig,
-        V4DPhysDataBuilder,
+        DetectorDataBuilder,
         normalize_slim_mode,
-        v4d_layout,
+        detector_layout,
     )
     from orsdet_detector import (
         configure_paths,
@@ -80,40 +80,34 @@ def main():
         install_numba_fallback_if_needed,
         normalize_target_source,
         target_table_path,
-        v4d_target_dim,
+        detector_target_dim,
     )
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, default=None)
     parser.add_argument("--new-run", action="store_true")
-    parser.add_argument("--runs-root", type=Path, default=V4D_DIR / "outputs" / "runs")
+    parser.add_argument("--runs-root", type=Path, default=DETECTOR_DIR / "outputs" / "runs")
     parser.add_argument(
         "--slim-mode",
-        default="v4d_s",
+        default="size",
         choices=(
-            "v4d_s",
-            "v4d-sa",
-            "v4d_sa",
             "size",
+            "shared_angle",
             "size-angle",
             "size_angle",
-            "v4i_dsa",
-            "v4d_sa_flux_refine",
-            "v4m_native_dsa",
-            "v4m_native",
-            "native_flux_head",
-            "v4k_dsa",
-            "v4d_sa_flux_calib_gate",
             "flux_refine",
+            "shared_angle_flux_refine",
+            "native_flux_head",
             "flux_calib_gate",
+            "shared_angle_flux_calib_gate",
         ),
-        help="V4d branch: v4d_s removes duplicate OBB W/H; v4d_sa also shares one angle pair.",
+        help="detector branch: size removes duplicate OBB W/H; shared_angle also shares one angle pair.",
     )
     parser.add_argument(
         "--target-source",
-        choices=("v1a", "v1"),
+        choices=("target_source", "geometry"),
         default=DEFAULT_TARGET_SOURCE,
-        help="OBB target table source. Default is v1a; use v1 for the older V1 target geometry.",
+        help="OBB target table source. Default is target_source; use geometry for direct geometry-derived targets.",
     )
     parser.add_argument(
         "--target-table",
@@ -121,7 +115,7 @@ def main():
         default=None,
         help="Explicit rotated_training_source_table.csv path. Overrides --target-source.",
     )
-    parser.add_argument("--epochs", type=int, default=int(os.environ.get("CIANNA_V4D_EPOCHS", "10")))
+    parser.add_argument("--epochs", type=int, default=int(os.environ.get("CIANNA_DETECTOR_EPOCHS", "10")))
     parser.add_argument("--control-interv", type=int, default=int(os.environ.get("CIANNA_CONTROL_INTERV", "10")))
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--comp-meth", default="C_CUDA")
@@ -141,7 +135,7 @@ def main():
         "--small-elongated-boost-factor",
         type=float,
         default=1.4,
-        help="Default is 1.4. Set to 1.0, or pass --no-small-elongated-boost, to keep the old no-boost target weights.",
+        help="Default is 1.4. Set to 1.0, or pass --no-small-elongated-boost, to disable this target-weight boost.",
     )
     parser.add_argument("--small-elongated-sqrt-area", type=float, default=8.0)
     parser.add_argument("--small-elongated-aspect", type=float, default=1.5)
@@ -199,14 +193,14 @@ def main():
         "--flux-refine-target-table",
         type=Path,
         default=None,
-        help="Optional Stage6b CSV target table with source_id and delta_log_adjust columns.",
+        help="Optional flux-refine CSV target table with source_id and delta_log_adjust columns.",
     )
     parser.add_argument("--flux-refine-target-source-col", default="source_id")
     parser.add_argument("--flux-refine-target-delta-adjust-col", default="delta_log_adjust")
     parser.add_argument(
         "--flux-refine-target-only",
         action="store_true",
-        help="When a Stage6b table is provided, train only sources present in that table.",
+        help="When a flux-refine table is provided, train only sources present in that table.",
     )
     parser.add_argument("--skip-valid-angle-report", action="store_true")
     parser.add_argument("--valid-angle-report-every", type=int, default=0)
@@ -214,19 +208,19 @@ def main():
     parser.add_argument(
         "--freeze-all-but-last",
         action="store_true",
-        help="Freeze all layers except the final YOLO conv. Used by V4m native delta-head training.",
+        help="Freeze all layers except the final YOLO conv. Used by ORSDet flux head native delta-head training.",
     )
     parser.add_argument(
         "--freeze-layer-count",
         type=int,
         default=18,
-        help="Number of V4d layers to pass to CIANNA.set_frozen_layers when --freeze-all-but-last is set.",
+        help="Number of detector layers to pass to CIANNA.set_frozen_layers when --freeze-all-but-last is set.",
     )
     parser.add_argument("load_epoch", nargs="?", type=int, default=0)
     args = parser.parse_args()
     args.target_source = normalize_target_source(args.target_source)
     args.slim_mode = normalize_slim_mode(args.slim_mode)
-    layout = v4d_layout(args.slim_mode)
+    layout = detector_layout(args.slim_mode)
     if args.no_small_elongated_boost:
         args.small_elongated_boost_factor = 1.0
 
@@ -332,7 +326,7 @@ def main():
     cnn.init(
         in_dim=i_ar([dg.image_size, dg.image_size]),
         in_nb_ch=1,
-        out_dim=v4d_target_dim(dg.max_nb_obj_per_image, layout.mode),
+        out_dim=detector_target_dim(dg.max_nb_obj_per_image, layout.mode),
         bias=0.1,
         b_size=args.batch_size,
         comp_meth=args.comp_meth,
@@ -356,9 +350,9 @@ def main():
         jitter=int(args.hard_group_jitter),
         seed=args.hard_group_seed,
     )
-    builder = V4DPhysDataBuilder(
+    builder = DetectorDataBuilder(
         dg,
-        v1_table_path=target_table,
+        source_table_path=target_table,
         slim_mode=layout.mode,
         small_elongated_boost=boost_config,
         hard_group_sampler=hard_group_config,
@@ -368,7 +362,7 @@ def main():
 
         target_csv = flux_refine_target_table
         if not target_csv.is_file():
-            raise FileNotFoundError("Stage6b flux refine target table not found: %s" % target_csv)
+            raise FileNotFoundError("flux-refine flux refine target table not found: %s" % target_csv)
         target_frame = pd.read_csv(target_csv)
         target_summary = builder.apply_flux_refine_target_table(
             target_frame,
@@ -378,8 +372,8 @@ def main():
         )
         builder.reset_hard_group_sampler(hard_group_config)
         with (run_dir / "run_info.txt").open("a", encoding="utf-8") as f:
-            f.write("stage6b_flux_target_summary=%s\n" % target_summary)
-        print("Stage6b flux target summary:", target_summary)
+            f.write("flux_refine_target_summary=%s\n" % target_summary)
+        print("flux-refine flux target summary:", target_summary)
     builder.save_norm_lims(run_dir / "train_norm.txt")
     with (run_dir / "run_info.txt").open("a", encoding="utf-8") as f:
         f.write("hard_group_sampler: %s\n" % builder.hard_group_description())
@@ -508,7 +502,7 @@ def main():
         frozen = np.ones(int(args.freeze_layer_count), dtype=np.int32)
         frozen[-1] = 0
         cnn.set_frozen_layers(frozen)
-        print("V4m native mode: frozen all layers except final YOLO conv (%d entries)." % args.freeze_layer_count)
+        print("ORSDet flux head native mode: frozen all layers except final YOLO conv (%d entries)." % args.freeze_layer_count)
 
     if shutil.which("pdflatex") is not None:
         cnn.print_arch_tex("./arch/", "arch", activation=1, dropout=1)
@@ -516,7 +510,7 @@ def main():
     grid_size = dg.image_size // dg.c_size
     valid_test_ready = False
 
-    def v4d_obb_angle_metrics(targets, forward):
+    def detector_obb_angle_metrics(targets, forward):
         compact_nb_angle = 2
         metric_nb_param = min(layout.nb_param, 3)
         compact_target_stride = 7 + metric_nb_param + compact_nb_angle + 1
@@ -581,7 +575,7 @@ def main():
             valid_test_ready = True
         cnn.forward(no_error=1, saving=1, repeat=1, drop_mode="AVG_MODEL", silent=1)
         forward = parse_yolo_forward(fwd_path, dg.nb_valid, grid_size, nb_yolo_filters)
-        metrics = v4d_obb_angle_metrics(targets_valid, forward)
+        metrics = detector_obb_angle_metrics(targets_valid, forward)
         if append_history:
             append_angle_history_row(run_dir / "angle_history.csv", epoch, metrics)
         if args.keep_valid_forward:
@@ -635,7 +629,7 @@ def main():
         print(report)
 
     write_error_summary(run_dir)
-    print("V4d run directory:", run_dir)
+    print("detector run directory:", run_dir)
 
 
 if __name__ == "__main__":

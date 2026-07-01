@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scoring helpers shared by the V4m Stage9 tools."""
+"""Scoring helpers shared by the ORSDet flux head tools."""
 
 from __future__ import annotations
 
@@ -60,9 +60,9 @@ def write_apply_report(
     corrections: pd.DataFrame,
 ) -> None:
     lines = [
-        "# V4m Stage9 应用报告",
+        "# ORSDet flux head 应用报告",
         "",
-        "本入口读取 V4m Stage9 模型包或单 `.dat` trailer，只替换 catalog `flux`。",
+        "本入口读取 ORSDet flux head 模型包或单 `.dat` trailer，只替换 catalog `flux`。",
         "",
         "## 输入输出",
         "",

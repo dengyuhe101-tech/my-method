@@ -1,13 +1,13 @@
-"""V4d targets with one native OBB size branch and physical shape parameters."""
+"""detector targets with one native OBB size branch and physical shape parameters."""
 
 from __future__ import annotations
 
 import numpy as np
 
 from orsdet_angle.angle_codec import encode_theta_le90, normalize_theta_le90
-from orsdet_candidates.data import PatchMeta, V25DataBuilder, _obb_to_hbb_fast, _transform_boxes
+from orsdet_candidates.data import PatchMeta, CandidateDataBuilder, _obb_to_hbb_fast, _transform_boxes
 
-from .decode import V4D_MODE_SIZE, v4d_layout, v4d_target_dim
+from .decode import DETECTOR_MODE_SIZE, detector_layout, detector_target_dim
 from .hard_group_sampler import HardGroupSampler, HardGroupSamplerConfig
 
 
@@ -22,12 +22,12 @@ def _transform_pa_le90(pa_deg, rot90: int, flip_w: int, flip_h: int):
     return pa
 
 
-class V4DPhysDataBuilder(V25DataBuilder):
-    """Build V4d targets for slim geometry/scoring separation.
+class DetectorDataBuilder(CandidateDataBuilder):
+    """Build detector targets for slim geometry/scoring separation.
 
-    V4d keeps OBB width/height only in the native YOLO box branch. The extra
-    parameter heads regress SDC1 physical flux/Bmaj/Bmin. V4d-S keeps separate
-    OBB theta and physical PA angle pairs; V4d-SA uses one shared angle pair.
+    detector keeps OBB width/height only in the native YOLO box branch. The extra
+    parameter heads regress SDC1 physical flux/Bmaj/Bmin. detector-S keeps separate
+    OBB theta and physical PA angle pairs; shared-angle uses one shared angle pair.
     """
 
     def __init__(
@@ -37,13 +37,13 @@ class V4DPhysDataBuilder(V25DataBuilder):
         hard_group_sampler: HardGroupSamplerConfig | None = None,
         **kwargs,
     ):
-        self.layout = v4d_layout(slim_mode)
+        self.layout = detector_layout(slim_mode)
         super().__init__(dg, **kwargs)
-        self.target_dim = v4d_target_dim(self.max_objects, self.layout.mode)
+        self.target_dim = detector_target_dim(self.max_objects, self.layout.mode)
         self.phys_bmaj_norm = np.asarray(dg.bmaj_list, dtype=np.float64)
         self.phys_bmin_norm = np.asarray(dg.bmin_list, dtype=np.float64)
         self.phys_pa_deg = np.asarray(dg.pa_list, dtype=np.float64)
-        self.phys_pa_known = np.asarray(self.v1_table["bmaj_arcsec"], dtype=np.float64) > float(dg.pa_res_lim)
+        self.phys_pa_known = np.asarray(self.source_table["bmaj_arcsec"], dtype=np.float64) > float(dg.pa_res_lim)
         self._center_x_order = np.argsort(self.boxes_global[:, 0])
         self._center_x_sorted = self.boxes_global[self._center_x_order, 0]
         self.hard_group_sampler = None
@@ -67,10 +67,10 @@ class V4DPhysDataBuilder(V25DataBuilder):
             raise ValueError("Source filter removed every source.")
 
         self.source_ids = self.source_ids[mask]
-        if hasattr(self.v1_table, "iloc"):
-            self.v1_table = self.v1_table.iloc[np.flatnonzero(mask)].reset_index(drop=True)
+        if hasattr(self.source_table, "iloc"):
+            self.source_table = self.source_table.iloc[np.flatnonzero(mask)].reset_index(drop=True)
         else:
-            self.v1_table = self.v1_table[mask]
+            self.source_table = self.source_table[mask]
         self.boxes_global = self.boxes_global[mask]
         self.global_hbb = self.global_hbb[mask]
         self.flux_norm = self.flux_norm[mask]
@@ -91,11 +91,11 @@ class V4DPhysDataBuilder(V25DataBuilder):
         delta_adjust_col: str = "delta_log_adjust",
         target_only: bool = False,
     ) -> dict[str, object]:
-        """Apply Stage6b catalog-derived flux targets to the training sources.
+        """Apply flux-refine catalog-derived flux targets to the training sources.
 
         The table supplies a log-flux adjustment relative to the original truth
         target. This keeps the ordinary detector target geometry intact while
-        letting the frozen native delta channel learn the Stage2/3 gated target.
+        letting the frozen native delta channel learn the bright-gated gated target.
         """
 
         source_values = np.asarray(target_table[source_id_col], dtype=np.int64)
@@ -114,7 +114,7 @@ class V4DPhysDataBuilder(V25DataBuilder):
         n_before = int(self.source_ids.size)
         n_matched = int(matched_mask.sum())
         if n_matched <= 0:
-            raise ValueError("Flux refine target table did not match any V4d training source ids.")
+            raise ValueError("Flux refine target table did not match any detector training source ids.")
 
         if target_only:
             self._filter_sources(matched_mask)
@@ -143,7 +143,7 @@ class V4DPhysDataBuilder(V25DataBuilder):
             "delta_adjust_max": float(np.max(source_adjust)) if source_adjust.size else 0.0,
             "delta_adjust_mean": float(np.mean(source_adjust)) if source_adjust.size else 0.0,
         }
-        self.stage6b_flux_target_summary = summary
+        self.flux_refine_target_summary = summary
         return summary
 
     def _patch_indices(self, x0: float, y0: float):
@@ -211,10 +211,10 @@ class V4DPhysDataBuilder(V25DataBuilder):
             ]
             for _ in range(max(0, self.layout.nb_param - 3)):
                 row_values.append(0.0)
-            if self.layout.mode == V4D_MODE_SIZE:
+            if self.layout.mode == DETECTOR_MODE_SIZE:
                 row_values.extend([obb_angle_vec[0], obb_angle_vec[1], phys_pa_vec[0], phys_pa_vec[1]])
             else:
-                # V4d-SA keeps the RotIoU geometry exact and lets catalog PA
+                # shared-angle keeps the RotIoU geometry exact and lets catalog PA
                 # share the same geometric angle at decode time.
                 row_values.extend([obb_angle_vec[0], obb_angle_vec[1]])
             row_values.append(self.angle_weights[src_idx])

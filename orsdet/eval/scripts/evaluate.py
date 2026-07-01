@@ -14,17 +14,16 @@ import time
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-V5_DIR = SCRIPT_DIR.parent
-SKAO_DIR = V5_DIR.parent
-V4M_HOOK_SCRIPT = SKAO_DIR / "flux_head" / "scripts" / "build_flux_head.py"
-V4M_APPLY_SCRIPT = SKAO_DIR / "flux_head" / "scripts" / "apply_flux_head.py"
-sys.path.insert(0, str(V5_DIR / "src"))
+EVAL_DIR = SCRIPT_DIR.parent
+SKAO_DIR = EVAL_DIR.parent
+FLUX_HEAD_HOOK_SCRIPT = SKAO_DIR / "flux_head" / "scripts" / "build_flux_head.py"
+FLUX_HEAD_APPLY_SCRIPT = SKAO_DIR / "flux_head" / "scripts" / "apply_flux_head.py"
+sys.path.insert(0, str(EVAL_DIR / "src"))
 
 from orsdet_eval.runtime import (  # noqa: E402
     ALL_PROFILES,
     OBB_PROFILES,
-    DEFAULT_OUT_DIR,
-    DEFAULT_RUN_DIR,
+    ORSDET_PROFILE,
     available_epochs,
     configure_paths,
     default_out_dir,
@@ -34,15 +33,8 @@ from orsdet_eval.runtime import (  # noqa: E402
     expected_fwd_bytes,
     fwd_file_complete,
     install_numba_fallback_if_needed,
-    is_v4m_stage9_profile,
-    v4d_mode_for_profile,
-    v4e_mode_for_profile,
-    v4f_mode_for_profile,
-    v4g_mode_for_profile,
-    v4h_mode_for_profile,
-    v4i_base_for_profile,
-    v4i_flux_decode_mode_for_profile,
-    v4i_mode_for_profile,
+    is_flux_head_profile,
+    detector_mode_for_profile,
 )
 
 
@@ -59,20 +51,19 @@ from orsdet_eval.obb_post import (  # noqa: E402
 from orsdet_eval.score import load_score_history_csv  # noqa: E402
 
 
-V4M_FORMAL_METADATA_FILES = (
+FLUX_HEAD_FORMAL_METADATA_FILES = (
     "train_norm.txt",
     "train_cat_norm_lims.txt",
     "TrainingSet_perscut.txt",
     "run_info.txt",
 )
-V4M_FORMAL_PROFILE_BY_SOURCE = {
-    "v4d_sa_obb_phys": "v4m_stage9_v4d_sa_v1a_obb_phys",
-    "v4e_cs_obb_phys": "v4m_stage9_v4d_sa_v1a_obb_phys",
+FLUX_HEAD_FORMAL_PROFILE_BY_SOURCE = {
+    "shared_angle_obb_phys": "flux_head_shared_angle_target_source_obb_phys",
 }
 
 
-def default_v4m_python() -> str:
-    env_value = os.environ.get("V4M_PYTHON")
+def default_flux_head_python() -> str:
+    env_value = os.environ.get("FLUX_HEAD_PYTHON")
     if env_value:
         return env_value
     ciana4090 = Path.home() / ".conda" / "envs" / "CIANNA4090" / "bin" / "python"
@@ -193,57 +184,36 @@ def promote_obb_stage(stage_dir: Path, out_dir: Path, epoch: int) -> None:
 
 
 def append_obb_profile_args(command: list[str], args) -> None:
-    v4d_mode = v4d_mode_for_profile(args.profile)
-    if v4d_mode is not None:
-        command.extend(["--slim-mode", v4d_mode])
-    v4e_mode = v4e_mode_for_profile(args.profile)
-    if v4e_mode is not None:
-        command.extend(["--slim-mode", v4e_mode])
-    v4f_mode = v4f_mode_for_profile(args.profile)
-    if v4f_mode is not None:
-        command.extend(["--slim-mode", v4f_mode])
-    v4g_mode = v4g_mode_for_profile(args.profile)
-    if v4g_mode is not None:
-        command.extend(["--slim-mode", v4g_mode])
-    v4h_mode = v4h_mode_for_profile(args.profile)
-    if v4h_mode is not None:
-        command.extend(["--slim-mode", v4h_mode])
-    v4i_mode = v4i_mode_for_profile(args.profile)
-    if v4i_mode is not None:
-        command.extend(["--slim-mode", v4i_mode])
-    v4i_flux_decode_mode = v4i_flux_decode_mode_for_profile(args.profile)
-    if v4i_flux_decode_mode is not None:
-        command.extend(["--flux-decode-mode", v4i_flux_decode_mode])
+    detector_mode = detector_mode_for_profile(args.profile)
+    if detector_mode is not None:
+        command.extend(["--slim-mode", detector_mode])
 
 
-def run_v4m_checkpoint_hook(post_script: Path, run_dir: Path, out_dir: Path, epoch: int, args, env, truth_path: Path) -> None:
-    if not args.v4m_hook:
+def run_flux_head_checkpoint_hook(post_script: Path, run_dir: Path, out_dir: Path, epoch: int, args, env, truth_path: Path) -> None:
+    if not args.flux_head_hook:
         return
-    if not V4M_HOOK_SCRIPT.is_file():
-        raise FileNotFoundError(V4M_HOOK_SCRIPT)
+    if not FLUX_HEAD_HOOK_SCRIPT.is_file():
+        raise FileNotFoundError(FLUX_HEAD_HOOK_SCRIPT)
     if post_script.name not in {"post_detector.py"}:
-        raise RuntimeError("V4m hook currently supports V4d/V4e post scripts only, got %s." % post_script)
+        raise RuntimeError("ORSDet flux head hook currently supports detector post scripts only, got %s." % post_script)
 
     detector = run_dir / "net_save" / ("net0_s%04d.dat" % epoch)
     if not detector.is_file():
-        raise FileNotFoundError("V4m hook requires detector checkpoint: %s" % detector)
+        raise FileNotFoundError("ORSDet flux head hook requires detector checkpoint: %s" % detector)
 
-    v4m_root = (args.v4m_out_dir or (out_dir / "v4m_checkpoint_hook")).resolve()
-    train_stage_dir = v4m_root / "_train_region_post" / ("epoch_%04d" % epoch)
+    flux_head_root = (args.flux_head_out_dir or (out_dir / "flux_head_checkpoint_hook")).resolve()
+    train_stage_dir = flux_head_root / "_train_region_post" / ("epoch_%04d" % epoch)
     train_catalog = train_stage_dir / ("catalog_sdc1_%04d.txt" % epoch)
     train_pred_obb = train_stage_dir / ("pred_obb_%04d.csv" % epoch)
-    if args.v4m_force and train_stage_dir.exists():
+    if args.flux_head_force and train_stage_dir.exists():
         shutil.rmtree(train_stage_dir)
     if not (train_catalog.is_file() and train_pred_obb.is_file()):
         train_stage_dir.mkdir(parents=True, exist_ok=True)
         train_post_cmd = [sys.executable, str(post_script), str(epoch)]
-        if args.profile == "v4a_obb":
-            train_post_cmd.extend(["--run-dir", str(run_dir)])
-        else:
-            train_post_cmd.extend(["--src-run-dir", str(run_dir)])
+        train_post_cmd.extend(["--src-run-dir", str(run_dir)])
         append_obb_profile_args(train_post_cmd, args)
         train_post_cmd.extend(["--out-dir", str(train_stage_dir), "--opt-rounds", "1", "--training-only"])
-        print("Running V4m training-region post:", " ".join(train_post_cmd), flush=True)
+        print("Running ORSDet flux head training-region post:", " ".join(train_post_cmd), flush=True)
         subprocess.check_call(train_post_cmd, env=env)
 
     apply_catalog = find_catalog_path(out_dir, epoch)
@@ -251,12 +221,12 @@ def run_v4m_checkpoint_hook(post_script: Path, run_dir: Path, out_dir: Path, epo
     require = [apply_catalog, apply_pred_obb, train_catalog, train_pred_obb]
     missing = [str(path) for path in require if not path.is_file()]
     if missing:
-        raise FileNotFoundError("V4m hook missing inputs: %s" % ", ".join(missing))
+        raise FileNotFoundError("ORSDet flux head hook missing inputs: %s" % ", ".join(missing))
 
-    hook_out = v4m_root / ("epoch_%04d" % epoch)
+    hook_out = flux_head_root / ("epoch_%04d" % epoch)
     hook_cmd = [
-        str(args.v4m_python),
-        str(V4M_HOOK_SCRIPT),
+        str(args.flux_head_python),
+        str(FLUX_HEAD_HOOK_SCRIPT),
         "--display",
         "%s@%04d" % (args.profile, epoch),
         "--epoch",
@@ -276,23 +246,23 @@ def run_v4m_checkpoint_hook(post_script: Path, run_dir: Path, out_dir: Path, epo
         "--out-dir",
         str(hook_out),
         "--device",
-        str(args.v4m_device),
+        str(args.flux_head_device),
         "--score",
         "--verify-dat",
     ]
-    if args.v4m_force:
+    if args.flux_head_force:
         hook_cmd.append("--force")
     hook_env = dict(os.environ if env is None else env)
     hook_env.pop("PYTHONNOUSERSITE", None)
-    print("Running V4m checkpoint hook:", " ".join(hook_cmd), flush=True)
+    print("Running ORSDet flux head checkpoint hook:", " ".join(hook_cmd), flush=True)
     subprocess.check_call(hook_cmd, env=hook_env)
-    formal_dat = export_v4m_formal_run(run_dir, hook_out, epoch, args)
-    if args.v4m_clean_source_checkpoint and formal_dat is not None and formal_dat.is_file():
-        cleanup_v4m_source_checkpoint(run_dir, epoch)
+    formal_dat = export_flux_head_formal_run(run_dir, hook_out, epoch, args)
+    if args.flux_head_clean_source_checkpoint and formal_dat is not None and formal_dat.is_file():
+        cleanup_flux_head_source_checkpoint(run_dir, epoch)
 
 
-def cleanup_v4m_source_checkpoint(run_dir: Path, epoch: int) -> None:
-    """Drop raw detector artifacts after the formal V4m single .dat is exported."""
+def cleanup_flux_head_source_checkpoint(run_dir: Path, epoch: int) -> None:
+    """Drop raw detector artifacts after the formal ORSDet flux head single .dat is exported."""
     candidates = [
         run_dir / "net_save" / ("net0_s%04d.dat" % epoch),
         run_dir / "fwd_res" / ("net0_%04d.dat" % epoch),
@@ -300,96 +270,96 @@ def cleanup_v4m_source_checkpoint(run_dir: Path, epoch: int) -> None:
     for path in candidates:
         if path.is_file():
             path.unlink()
-            print("Removed V4m source cache:", path, flush=True)
+            print("Removed ORSDet flux head source cache:", path, flush=True)
 
 
-def export_v4m_formal_run(src_run_dir: Path, hook_out: Path, epoch: int, args) -> Path | None:
-    if args.v4m_formal_run_dir is None:
+def export_flux_head_formal_run(src_run_dir: Path, hook_out: Path, epoch: int, args) -> Path | None:
+    if args.flux_head_formal_run_dir is None:
         return None
-    formal_profile = args.v4m_formal_profile or V4M_FORMAL_PROFILE_BY_SOURCE.get(
-        args.profile, "v4m_stage9_v4d_sa_v1a_obb_phys"
+    formal_profile = args.flux_head_formal_profile or FLUX_HEAD_FORMAL_PROFILE_BY_SOURCE.get(
+        args.profile, ORSDET_PROFILE
     )
-    report_path = hook_out / "stage9_checkpoint_hook_report.json"
+    report_path = hook_out / "flux_head_checkpoint_hook_report.json"
     if not report_path.is_file():
-        raise FileNotFoundError("V4m formal export missing hook report: %s" % report_path)
+        raise FileNotFoundError("ORSDet flux head formal export missing hook report: %s" % report_path)
     report = json.loads(report_path.read_text(encoding="utf-8"))
     dat_value = report.get("dat_path_abs") or report.get("dat_path")
     if not dat_value:
-        raise RuntimeError("V4m hook report has no dat_path: %s" % report_path)
+        raise RuntimeError("ORSDet flux head hook report has no dat_path: %s" % report_path)
     hook_dat = Path(str(dat_value))
     if not hook_dat.is_absolute():
         hook_dat = (hook_out / hook_dat).resolve()
     if not hook_dat.is_file():
-        raise FileNotFoundError("V4m hook dat not found: %s" % hook_dat)
+        raise FileNotFoundError("ORSDet flux head hook dat not found: %s" % hook_dat)
 
-    formal_run = args.v4m_formal_run_dir.resolve()
+    formal_run = args.flux_head_formal_run_dir.resolve()
     net_dir = formal_run / "net_save"
     net_dir.mkdir(parents=True, exist_ok=True)
     formal_dat = net_dir / ("net0_s%04d.dat" % epoch)
-    if formal_dat.exists() and not args.v4m_force:
-        raise FileExistsError("V4m formal .dat already exists: %s" % formal_dat)
+    if formal_dat.exists() and not args.flux_head_force:
+        raise FileExistsError("ORSDet flux head formal .dat already exists: %s" % formal_dat)
     shutil.copy2(hook_dat, formal_dat)
 
-    for name in V4M_FORMAL_METADATA_FILES:
+    for name in FLUX_HEAD_FORMAL_METADATA_FILES:
         src = src_run_dir / name
         if src.is_file():
             shutil.copy2(src, formal_run / name)
 
     info = {
-        "model": "V4m Stage9 decoded-candidate flux head",
+        "model": "ORSDet flux head decoded-candidate flux head",
         "profile": formal_profile,
         "epoch": int(epoch),
         "source_run_dir": str(src_run_dir.resolve()),
         "hook_out": str(hook_out.resolve()),
-        "source_v4m_dat": str(hook_dat.resolve()),
-        "formal_v4m_dat": str(formal_dat.resolve()),
-        "note": "Formal run stores the deliverable one .dat per checkpoint: detector prefix + Stage9 trailer payload.",
+        "source_flux_head_dat": str(hook_dat.resolve()),
+        "formal_flux_head_dat": str(formal_dat.resolve()),
+        "note": "Formal run stores the deliverable one .dat per checkpoint: detector prefix + flux head trailer payload.",
     }
     (formal_run / "run_info.txt").write_text(
         "\n".join("%s=%s" % (key, value) for key, value in info.items()) + "\n",
         encoding="utf-8",
     )
-    print("Exported V4m formal single .dat:", formal_dat, flush=True)
+    print("Exported ORSDet flux head formal single .dat:", formal_dat, flush=True)
     return formal_dat
 
 
-def apply_v4m_stage9_profile(run_dir: Path, out_dir: Path, epoch: int, args, env) -> None:
-    if not is_v4m_stage9_profile(args.profile):
+def apply_flux_head_profile(run_dir: Path, out_dir: Path, epoch: int, args, env) -> None:
+    if not is_flux_head_profile(args.profile):
         return
-    if not V4M_APPLY_SCRIPT.is_file():
-        raise FileNotFoundError(V4M_APPLY_SCRIPT)
+    if not FLUX_HEAD_APPLY_SCRIPT.is_file():
+        raise FileNotFoundError(FLUX_HEAD_APPLY_SCRIPT)
 
     dat_package = run_dir / "net_save" / ("net0_s%04d.dat" % epoch)
     if not dat_package.is_file():
-        raise FileNotFoundError("Missing V4m Stage9 .dat: %s" % dat_package)
+        raise FileNotFoundError("Missing ORSDet flux head .dat: %s" % dat_package)
 
     catalog = find_catalog_path(out_dir, epoch)
     pred_obb = find_pred_obb_path(out_dir, epoch)
     missing = [str(path) for path in (catalog, pred_obb) if not path.is_file()]
     if missing:
-        raise FileNotFoundError("V4m Stage9 apply missing inputs: %s" % ", ".join(missing))
+        raise FileNotFoundError("ORSDet flux head apply missing inputs: %s" % ", ".join(missing))
 
-    stage_dir = out_dir / "v4m_stage9" / ("epoch_%04d" % epoch)
+    stage_dir = out_dir / "flux_head" / ("epoch_%04d" % epoch)
     apply_dir = stage_dir / "apply"
     marker = stage_dir / "applied.json"
-    corrected = apply_dir / "catalog_v4m_post_head.txt"
+    corrected = apply_dir / "catalog_flux_head_post_head.txt"
     base_catalog = stage_dir / ("base_catalog_sdc1_%04d.txt" % epoch)
 
-    if marker.is_file() and corrected.is_file() and not args.v4m_force:
-        print("V4m Stage9 already applied for epoch %04d." % epoch, flush=True)
+    if marker.is_file() and corrected.is_file() and not args.flux_head_force:
+        print("ORSDet flux head already applied for epoch %04d." % epoch, flush=True)
         return
 
     stage_dir.mkdir(parents=True, exist_ok=True)
     if not base_catalog.is_file():
         shutil.copy2(catalog, base_catalog)
-    if apply_dir.exists() and args.v4m_force:
+    if apply_dir.exists() and args.flux_head_force:
         shutil.rmtree(apply_dir)
     apply_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [
         sys.executable,
-        str(V4M_APPLY_SCRIPT),
-        "--v4m-dat",
+        str(FLUX_HEAD_APPLY_SCRIPT),
+        "--flux-head-dat",
         str(dat_package),
         "--catalog",
         str(base_catalog),
@@ -398,7 +368,7 @@ def apply_v4m_stage9_profile(run_dir: Path, out_dir: Path, epoch: int, args, env
         "--out-dir",
         str(apply_dir),
     ]
-    print("Applying V4m Stage9 payload:", " ".join(cmd), flush=True)
+    print("Applying ORSDet flux head payload:", " ".join(cmd), flush=True)
     subprocess.check_call(cmd, env=env)
     if not corrected.is_file():
         raise FileNotFoundError(corrected)
@@ -412,7 +382,7 @@ def apply_v4m_stage9_profile(run_dir: Path, out_dir: Path, epoch: int, args, env
                 "base_catalog": str(base_catalog.resolve()),
                 "corrected_catalog": str(corrected.resolve()),
                 "final_catalog": str(catalog.resolve()),
-                "note": "eval formal V4m Stage9 profile applies the single .dat payload before scoring.",
+                "note": "eval formal ORSDet flux head profile applies the single .dat payload before scoring.",
             },
             indent=2,
             sort_keys=True,
@@ -479,12 +449,12 @@ def run_best_diagnostics(
     """
 
     if args.live_plots or refresh_plots:
-        plot_cmd = [sys.executable, str(SCRIPT_DIR / "plot_v5.py"), "--eval-dir", str(out_dir)]
+        plot_cmd = [sys.executable, str(SCRIPT_DIR / "plot_eval.py"), "--eval-dir", str(out_dir)]
         print("Refreshing best-epoch plots for %04d" % best_epoch, flush=True)
         print("Running:", " ".join(plot_cmd), flush=True)
         subprocess.check_call(plot_cmd)
     if args.live_regions and refresh_regions:
-        vis_cmd = [sys.executable, str(SCRIPT_DIR / "vis_v5.py"), "--eval-dir", str(out_dir)]
+        vis_cmd = [sys.executable, str(SCRIPT_DIR / "vis_eval.py"), "--eval-dir", str(out_dir)]
         print("Refreshing best-epoch region visualizations for %04d" % best_epoch, flush=True)
         print("Running:", " ".join(vis_cmd), flush=True)
         subprocess.check_call(vis_cmd)
@@ -498,7 +468,7 @@ def main():
     parser.add_argument(
         "--profile",
         choices=ALL_PROFILES,
-        default="v4a_obb",
+        default=ORSDET_PROFILE,
     )
     parser.add_argument("--run-pred", action="store_true", help="Run predict.py before scoring selected epochs.")
     parser.add_argument("--latest", action="store_true")
@@ -537,37 +507,37 @@ def main():
         help="For OBB profiles, refresh intermediate plots every N scored epochs after --auto-plot-min-epochs.",
     )
     parser.add_argument("--no-auto-plots", action="store_true", help="Disable intermediate plot refresh for OBB profiles.")
-    parser.add_argument("--live-plots", action="store_true", help="Refresh best-epoch plot_v5.py outputs during live scoring.")
-    parser.add_argument("--live-regions", action="store_true", help="Refresh best-epoch vis_v5.py outputs when the best epoch changes.")
-    parser.add_argument("--v4m-hook", action="store_true", help="After each OBB epoch, train/package the V4m checkpoint hook.")
-    parser.add_argument("--v4m-out-dir", type=Path, default=None, help="Output root for V4m checkpoint hook artifacts.")
+    parser.add_argument("--live-plots", action="store_true", help="Refresh best-epoch plot_eval.py outputs during live scoring.")
+    parser.add_argument("--live-regions", action="store_true", help="Refresh best-epoch vis_eval.py outputs when the best epoch changes.")
+    parser.add_argument("--flux-head-hook", action="store_true", help="After each OBB epoch, train/package the ORSDet flux head checkpoint hook.")
+    parser.add_argument("--flux-head-out-dir", type=Path, default=None, help="Output root for ORSDet flux head checkpoint hook artifacts.")
     parser.add_argument(
-        "--v4m-formal-run-dir",
+        "--flux-head-formal-run-dir",
         type=Path,
         default=None,
         help="Optional run directory receiving hook-packaged single .dat files as net_save/net0_sXXXX.dat.",
     )
     parser.add_argument(
-        "--v4m-formal-profile",
+        "--flux-head-formal-profile",
         choices=ALL_PROFILES,
         default=None,
-        help="V4m Stage9 profile written into formal-run metadata; useful when exporting V1a or custom formal runs.",
+        help="ORSDet flux head profile written into formal-run metadata; useful when exporting target-source or custom formal runs.",
     )
-    parser.add_argument("--v4m-python", default=default_v4m_python(), help="Python executable used for V4m hook training.")
+    parser.add_argument("--flux-head-python", default=default_flux_head_python(), help="Python executable used for ORSDet flux head hook training.")
     parser.add_argument(
-        "--v4m-device",
+        "--flux-head-device",
         default="cpu",
-        help="Device passed to the flux-head builder; default keeps the small Stage9 head on CPU.",
+        help="Device passed to the flux head builder; default keeps the small flux head on CPU.",
     )
-    parser.add_argument("--v4m-force", action="store_true", help="Overwrite existing V4m hook artifacts for an epoch.")
+    parser.add_argument("--flux-head-force", action="store_true", help="Overwrite existing ORSDet flux head hook artifacts for an epoch.")
     parser.add_argument(
-        "--v4m-clean-source-checkpoint",
+        "--flux-head-clean-source-checkpoint",
         action="store_true",
         help="After exporting the formal single .dat, remove the raw detector checkpoint and detector fwd cache for that epoch.",
     )
     args = parser.parse_args()
-    if args.v4m_formal_profile is not None and not is_v4m_stage9_profile(args.v4m_formal_profile):
-        parser.error("--v4m-formal-profile must be a V4m Stage9 profile.")
+    if args.flux_head_formal_profile is not None and not is_flux_head_profile(args.flux_head_formal_profile):
+        parser.error("--flux-head-formal-profile must be a ORSDet flux head profile.")
 
     configure_paths()
     install_numba_fallback_if_needed()
@@ -581,24 +551,7 @@ def main():
     epochs = [] if args.watch else select_epochs(run_dir, args, expected_bytes)
 
     if args.profile in OBB_PROFILES:
-        if args.profile == "v4a_obb":
-            post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
-        elif args.profile == "v4b_obb_phys":
-            post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
-        elif v4f_mode_for_profile(args.profile) is not None:
-            post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
-        elif v4g_mode_for_profile(args.profile) is not None:
-            post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
-        elif v4h_mode_for_profile(args.profile) is not None:
-            post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
-        elif v4i_base_for_profile(args.profile) == "ecs":
-            post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
-        elif v4i_base_for_profile(args.profile) == "dsa":
-            post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
-        elif v4e_mode_for_profile(args.profile) is not None:
-            post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
-        else:
-            post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
+        post_script = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
         if not post_script.is_file():
             raise FileNotFoundError(post_script)
 
@@ -656,16 +609,13 @@ def main():
                 if not (find_catalog_path(out_dir, epoch).is_file() and find_pred_obb_path(out_dir, epoch).is_file()):
                     stage_dir = prepare_obb_stage(out_dir, epoch)
                     post_cmd = [sys.executable, str(post_script), str(epoch)]
-                    if args.profile == "v4a_obb":
-                        post_cmd.extend(["--run-dir", str(run_dir)])
-                    else:
-                        post_cmd.extend(["--src-run-dir", str(run_dir)])
+                    post_cmd.extend(["--src-run-dir", str(run_dir)])
                     append_obb_profile_args(post_cmd, args)
                     post_cmd.extend(["--out-dir", str(stage_dir), "--opt-rounds", str(args.opt_rounds)])
                     subprocess.check_call(post_cmd, env=env)
                     promote_obb_stage(stage_dir, out_dir, epoch)
 
-                apply_v4m_stage9_profile(run_dir, out_dir, epoch, args, env)
+                apply_flux_head_profile(run_dir, out_dir, epoch, args, env)
                 result, scorer = score_obb_epoch(out_dir, epoch, aux.TRUTH_CATALOG_PATH, train_score=args.train_score)
                 results_by_epoch[epoch] = result
                 results = list(results_by_epoch.values())
@@ -694,7 +644,7 @@ def main():
 
                 if best_changed:
                     print("best epoch updated: %04d score: %.10f" % (best.epoch, best.score), flush=True)
-                run_v4m_checkpoint_hook(post_script, run_dir, out_dir, epoch, args, env, Path(aux.TRUTH_CATALOG_PATH))
+                run_flux_head_checkpoint_hook(post_script, run_dir, out_dir, epoch, args, env, Path(aux.TRUTH_CATALOG_PATH))
                 if best_changed or should_refresh_plots:
                     run_best_diagnostics(
                         out_dir,

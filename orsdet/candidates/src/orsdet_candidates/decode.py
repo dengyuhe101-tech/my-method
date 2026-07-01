@@ -1,4 +1,4 @@
-"""Decoding helpers for V2.5 OBB targets and predictions."""
+"""Decoding helpers for candidate OBB targets and predictions."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from orsdet_geometry.geometry import canonicalize_le90, hbb_from_obb, xywhtheta_
 from orsdet_angle.angle_codec import decode_angle_vector
 
 
-V25_NB_PARAM = 3
-V25_NB_ANGLE = 2
-V25_TARGET_STRIDE = 7 + V25_NB_PARAM + V25_NB_ANGLE + 1
+CANDIDATE_NB_PARAM = 3
+CANDIDATE_NB_ANGLE = 2
+CANDIDATE_TARGET_STRIDE = 7 + CANDIDATE_NB_PARAM + CANDIDATE_NB_ANGLE + 1
 
 
-def v25_target_dim(max_nb_obj_per_image: int) -> int:
-    return 1 + int(max_nb_obj_per_image) * V25_TARGET_STRIDE
+def candidate_target_dim(max_nb_obj_per_image: int) -> int:
+    return 1 + int(max_nb_obj_per_image) * CANDIDATE_TARGET_STRIDE
 
 
 def denorm_log_value(norm_values, lims_row):

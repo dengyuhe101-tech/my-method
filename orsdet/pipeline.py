@@ -16,7 +16,7 @@ ORSDET = ROOT / "orsdet"
 CIANNA = ROOT / "src"
 TRAIN_INTERNAL = ORSDET / "flux_head" / "scripts" / "train_pipeline_internal.py"
 EVAL_INTERNAL = ORSDET / "eval" / "scripts" / "evaluate.py"
-PROFILE = "v4m_stage9_v4d_sa_v1a_obb_phys"
+PROFILE = "flux_head_shared_angle_target_source_obb_phys"
 DEFAULT_CHECKPOINT = ROOT / "weights" / "net0_s2700.dat"
 RAW_FILES = (
     "sdc1_560MHz_1000h.fits",
@@ -100,7 +100,7 @@ def score_catalog(catalog: Path, truth: Path, *, train: bool = False) -> None:
 
 
 def train_main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Train ORSDet and package Stage9 flux-head checkpoints.")
+    parser = argparse.ArgumentParser(description="Train ORSDet and package flux head checkpoints.")
     parser.add_argument("--raw-data-dir", default=None)
     parser.add_argument("--run-dir", type=Path, default=ROOT / "outputs" / "train")
     parser.add_argument("--epochs", type=int, default=2700)
@@ -178,7 +178,7 @@ def test_main(argv: list[str] | None = None) -> None:
         out_dir,
         "--batch-size",
         args.batch_size,
-        "--v4m-force",
+        "--flux-head-force",
     ]
     if not args.no_run_pred:
         cmd.append("--run-pred")

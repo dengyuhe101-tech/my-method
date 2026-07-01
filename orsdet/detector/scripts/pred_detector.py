@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Full-image prediction for V4d."""
+"""Full-image prediction for detector."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ import numpy as np
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-V4D_DIR = SCRIPT_DIR.parent
-SKAO_DIR = V4D_DIR.parent
-V4D_NB_LAYERS = 18
-sys.path.insert(0, str(V4D_DIR / "src"))
+DETECTOR_DIR = SCRIPT_DIR.parent
+SKAO_DIR = DETECTOR_DIR.parent
+DETECTOR_NB_LAYERS = 18
+sys.path.insert(0, str(DETECTOR_DIR / "src"))
 sys.path.insert(0, str(SKAO_DIR / "candidates" / "src"))
 sys.path.insert(0, str(SKAO_DIR / "angle" / "src"))
 sys.path.insert(0, str(SKAO_DIR / "target_source" / "src"))
@@ -70,7 +70,7 @@ def read_run_slim_mode(run_dir: Path) -> str | None:
 
 
 def training_tile_mask(dg, *, halo_tiles: int = 2) -> np.ndarray:
-    """Tiles needed by the training-region Stage9 post-NMS pass.
+    """Tiles needed by the training-region flux head post-NMS pass.
 
     The mask intentionally matches post_detector.py --training-only. Prediction keeps
     the on-disk fwd_res shape full-size, but only these tiles are forwarded.
@@ -182,7 +182,7 @@ def write_roi_fwd_marker(path: Path, *, tile_indices: np.ndarray, dg, layout, ha
 
 def main():
     from orsdet_detector import DEFAULT_RUN_DIR, configure_paths, install_numba_fallback_if_needed
-    from orsdet_detector import normalize_slim_mode, v4d_layout, v4d_target_dim
+    from orsdet_detector import normalize_slim_mode, detector_layout, detector_target_dim
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("epoch", nargs="?", type=int)
@@ -191,23 +191,17 @@ def main():
         "--slim-mode",
         default=None,
         choices=(
-            "v4d_s",
-            "v4d-sa",
-            "v4d_sa",
             "size",
+            "shared_angle",
             "size-angle",
             "size_angle",
-            "v4i_dsa",
-            "v4d_sa_flux_refine",
-            "v4m_native_dsa",
-            "v4m_native",
-            "native_flux_head",
-            "v4k_dsa",
-            "v4d_sa_flux_calib_gate",
             "flux_refine",
+            "shared_angle_flux_refine",
+            "native_flux_head",
             "flux_calib_gate",
+            "shared_angle_flux_calib_gate",
         ),
-        help="V4d branch. Defaults to run_info.txt slim_mode, then v4d_s.",
+        help="detector branch. Defaults to run_info.txt slim_mode, then size.",
     )
     parser.add_argument("--latest", action="store_true", help="Only predict the latest checkpoint.")
     parser.add_argument("--epoch-start", type=int)
@@ -222,7 +216,7 @@ def main():
     parser.add_argument(
         "--training-roi-only",
         action="store_true",
-        help="Forward only tiles needed by training-region Stage9; pad fwd_res back to the standard full-image shape.",
+        help="Forward only tiles needed by training-region flux head; pad fwd_res back to the standard full-image shape.",
     )
     parser.add_argument("--roi-halo-tiles", type=int, default=2)
     args = parser.parse_args()
@@ -234,8 +228,8 @@ def main():
     import data_gen as dg
 
     run_dir = args.run_dir.resolve()
-    slim_mode = normalize_slim_mode(args.slim_mode or read_run_slim_mode(run_dir) or "v4d_s")
-    layout = v4d_layout(slim_mode)
+    slim_mode = normalize_slim_mode(args.slim_mode or read_run_slim_mode(run_dir) or "size")
+    layout = detector_layout(slim_mode)
     if args.epoch is not None:
         epochs = [args.epoch]
     elif args.latest:
@@ -277,7 +271,7 @@ def main():
     cnn.init(
         in_dim=i_ar([dg.fwd_image_size, dg.fwd_image_size]),
         in_nb_ch=1,
-        out_dim=v4d_target_dim(dg.max_nb_obj_per_image, layout.mode),
+        out_dim=detector_target_dim(dg.max_nb_obj_per_image, layout.mode),
         bias=0.1,
         b_size=args.batch_size,
         comp_meth=args.comp_meth,
@@ -299,7 +293,7 @@ def main():
         input_data = create_tile_pred(dg, roi_tile_indices)
     else:
         input_data = dg.create_full_pred()
-    targets = np.zeros((input_data.shape[0], v4d_target_dim(dg.max_nb_obj_per_image, layout.mode)), dtype="float32")
+    targets = np.zeros((input_data.shape[0], detector_target_dim(dg.max_nb_obj_per_image, layout.mode)), dtype="float32")
     cnn.create_dataset("TEST", input_data.shape[0], input_data[:, :], targets[:, :])
 
     prior_w = f_ar([6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 12.0, 9.0, 24.0])
@@ -356,7 +350,7 @@ def main():
         model_path = run_dir / "net_save" / ("net0_s%04d.dat" % epoch)
         if not model_path.is_file():
             raise FileNotFoundError(model_path)
-        cnn.load(str(model_path), epoch, nb_layers=V4D_NB_LAYERS, bin=1)
+        cnn.load(str(model_path), epoch, nb_layers=DETECTOR_NB_LAYERS, bin=1)
         cnn.forward(no_error=1, saving=2, repeat=1, drop_mode="AVG_MODEL")
         fwd_path = run_dir / "fwd_res" / ("net0_%04d.dat" % epoch)
         if roi_tile_indices is not None:

@@ -1,4 +1,4 @@
-"""V2 angle-head utilities for the CIANNA-New OBB migration."""
+"""angle angle-head utilities for the CIANNA-New OBB migration."""
 
 from .angle_codec import (
     angle_diff_le90_deg,
@@ -16,21 +16,21 @@ from .tables import (
     AngleTargetTable,
     build_angle_target_table,
     load_angle_target_table,
-    load_v1_rotated_table,
+    load_rotated_source_table,
     save_angle_target_table,
 )
 from .cianna_bridge import (
-    V2AngleHeadSpec,
+    AngleHeadSpec,
     decode_angle_prediction,
     make_angle_target_channels,
 )
 from .cianna_targets import (
-    V2_NB_ANGLE,
-    V2_NB_PARAM,
-    V2TargetSpec,
-    convert_legacy_targets_to_v2,
+    ANGLE_NB_ANGLE,
+    ANGLE_NB_PARAM,
+    AngleTargetSpec,
+    convert_legacy_targets_to_angle,
     decode_legacy_pa,
-    v2_target_dim,
+    angle_target_dim,
 )
 from .cianna_forward_eval import (
     angle_distribution_report,
@@ -51,23 +51,23 @@ __all__ = [
     "angle_weight_from_aspect",
     "append_angle_history_row",
     "build_angle_target_table",
-    "convert_legacy_targets_to_v2",
+    "convert_legacy_targets_to_angle",
     "decode_angle_prediction",
     "decode_angle_vector",
     "decode_legacy_pa",
     "encode_theta_le90",
     "load_angle_target_table",
-    "load_v1_rotated_table",
+    "load_rotated_source_table",
     "make_angle_target_channels",
     "metrics_from_valid_targets_and_forward",
     "normalize_theta_le90",
     "parse_yolo_forward",
     "save_angle_target_table",
     "summarize_all_metrics",
-    "V2_NB_ANGLE",
-    "V2_NB_PARAM",
-    "V2AngleHeadSpec",
-    "V2TargetSpec",
-    "v2_target_dim",
+    "ANGLE_NB_ANGLE",
+    "ANGLE_NB_PARAM",
+    "AngleHeadSpec",
+    "AngleTargetSpec",
+    "angle_target_dim",
     "write_valid_angle_report",
 ]

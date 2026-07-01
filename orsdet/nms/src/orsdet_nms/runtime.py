@@ -1,4 +1,4 @@
-"""Runtime helpers for V3 rotated NMS."""
+"""Runtime helpers for rotated NMS rotated NMS."""
 
 from __future__ import annotations
 
@@ -7,22 +7,22 @@ import types
 from pathlib import Path
 
 
-V3_DIR = Path(__file__).resolve().parents[2]
-SKAO_DIR = V3_DIR.parent
+NMS_DIR = Path(__file__).resolve().parents[2]
+SKAO_DIR = NMS_DIR.parent
 ROOT_DIR = SKAO_DIR.parent
 CIANNA_DIR = ROOT_DIR / "src"
-V25_DIR = SKAO_DIR / "candidates"
-V2_DIR = SKAO_DIR / "angle"
-V1_DIR = SKAO_DIR / "geometry"
-DEFAULT_SRC_RUN_DIR = V25_DIR / "outputs" / "train_report"
-DEFAULT_OUT_DIR = V3_DIR / "outputs" / "eval"
+CANDIDATE_DIR = SKAO_DIR / "candidates"
+ANGLE_DIR = SKAO_DIR / "angle"
+GEOMETRY_DIR = SKAO_DIR / "geometry"
+DEFAULT_SRC_RUN_DIR = CANDIDATE_DIR / "outputs" / "train_report"
+DEFAULT_OUT_DIR = NMS_DIR / "outputs" / "eval"
 
 
 def configure_paths() -> None:
-    sys.path.insert(0, str(V3_DIR / "src"))
-    sys.path.insert(0, str(V25_DIR / "src"))
-    sys.path.insert(0, str(V2_DIR / "src"))
-    sys.path.insert(0, str(V1_DIR / "src"))
+    sys.path.insert(0, str(NMS_DIR / "src"))
+    sys.path.insert(0, str(CANDIDATE_DIR / "src"))
+    sys.path.insert(0, str(ANGLE_DIR / "src"))
+    sys.path.insert(0, str(GEOMETRY_DIR / "src"))
     sys.path.insert(0, str(SKAO_DIR))
 
     preferred = CIANNA_DIR / "build" / "lib.cianna4090-cuda" / "CIANNA.so"

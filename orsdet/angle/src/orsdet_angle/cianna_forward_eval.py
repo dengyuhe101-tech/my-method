@@ -8,7 +8,7 @@ import numpy as np
 
 from .angle_codec import angle_diff_le90_deg, decode_angle_vector
 from .angle_loss import AngleLossConfig, angle_loss_and_grad
-from .cianna_targets import V2_NB_ANGLE, V2_NB_PARAM, V2TargetSpec
+from .cianna_targets import ANGLE_NB_ANGLE, ANGLE_NB_PARAM, AngleTargetSpec
 from .metrics import (
     PredictionMetrics,
     format_summary_text,
@@ -45,13 +45,13 @@ def metrics_from_valid_targets_and_forward(
     grid_size: int,
     nb_box: int,
     lims=None,
-    nb_param: int = V2_NB_PARAM,
-    nb_angle: int = V2_NB_ANGLE,
+    nb_param: int = ANGLE_NB_PARAM,
+    nb_angle: int = ANGLE_NB_ANGLE,
     unit_norm_weight: float = 0.02,
 ) -> PredictionMetrics:
     """Compare target-cell angle vectors with the highest-objectness box."""
 
-    target_spec = V2TargetSpec(nb_param=nb_param, nb_angle=nb_angle)
+    target_spec = AngleTargetSpec(nb_param=nb_param, nb_angle=nb_angle)
     target_stride = target_spec.target_stride
     output_stride = 8 + nb_param + nb_angle
     if forward.shape[1] != nb_box * output_stride:

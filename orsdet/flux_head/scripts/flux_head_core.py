@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Core Stage9 target building and ridge helpers."""
+"""Core flux head target building and ridge helpers."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from ska_sdc.sdc1.utils import prep as scorer_prep
 from flux_common import (
     EPS,
     FEATURE_COLUMNS,
-    add_stage9_feature_expansion,
+    add_flux_head_feature_expansion,
     build_detector_feature_frame,
     read_catalog,
     regression_metrics,
@@ -310,7 +310,7 @@ def build_geom_target_table_from_paths(
 
 
 def add_feature_expansion(features: pd.DataFrame, *, nb_prior: int = 9) -> pd.DataFrame:
-    return add_stage9_feature_expansion(features, nb_prior=nb_prior)
+    return add_flux_head_feature_expansion(features, nb_prior=nb_prior)
 
 
 def feature_columns(frame: pd.DataFrame, *, use_expansion: bool) -> list[str]:
@@ -389,7 +389,7 @@ def weighted_ridge_fit(
     penalty = np.eye(xtx.shape[0], dtype=np.float64) * float(alpha)
     coef = np.linalg.solve(xtx + penalty, zw.T @ yw)
     return {
-        "model": "stage9_weighted_decoded_ridge",
+        "model": "flux_head_weighted_decoded_ridge",
         "columns": columns,
         "mean": mean.tolist(),
         "scale": scale.tolist(),

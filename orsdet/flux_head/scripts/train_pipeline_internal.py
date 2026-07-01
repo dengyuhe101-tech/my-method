@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Run the V4m single-GPU sequential training pipeline.
+"""Run the ORSDet flux head single-GPU sequential training pipeline.
 
-V4m is trained as a checkpoint-integrated two-stage model:
+ORSDet flux head is trained as a checkpoint-integrated two-stage model:
 
-1. Train the V4d-SA/V1a detector to the next checkpoint.
-2. Freeze that checkpoint, build the Stage9 decoded-candidate flux head, and
-   export detector + Stage9 as one formal .dat.
+1. Train the shared-angle target-source detector to the next checkpoint.
+2. Freeze that checkpoint, build the flux head decoded-candidate flux head, and
+   export detector + flux head as one formal .dat.
 3. Continue detector training from that checkpoint and repeat.
 
 The formal prediction/evaluation watcher remains a separate command so users
@@ -23,13 +23,13 @@ import sys
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-V4M_DIR = SCRIPT_DIR.parent
-SKAO_DIR = V4M_DIR.parent
+FLUX_HEAD_DIR = SCRIPT_DIR.parent
+SKAO_DIR = FLUX_HEAD_DIR.parent
 REPO_DIR = SKAO_DIR.parents[1]
-V4D_POST_SCRIPT = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
-V4D_PRED_SCRIPT = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
-V4D_TRAIN_SCRIPT = SKAO_DIR / "detector" / "scripts" / "train_detector.py"
-STAGE9_HOOK_SCRIPT = SCRIPT_DIR / "build_flux_head.py"
+DETECTOR_POST_SCRIPT = SKAO_DIR / "detector" / "scripts" / "post_detector.py"
+DETECTOR_PRED_SCRIPT = SKAO_DIR / "detector" / "scripts" / "pred_detector.py"
+DETECTOR_TRAIN_SCRIPT = SKAO_DIR / "detector" / "scripts" / "train_detector.py"
+FLUX_HEAD_HOOK_SCRIPT = SCRIPT_DIR / "build_flux_head.py"
 FORMAL_METADATA_FILES = ("train_norm.txt", "train_cat_norm_lims.txt", "TrainingSet_perscut.txt")
 
 
@@ -43,7 +43,7 @@ def rel_or_abs(path: Path) -> str:
 def resolve_output_path(path: Path) -> Path:
     if path.is_absolute():
         return path
-    return (V4M_DIR / path).resolve()
+    return (FLUX_HEAD_DIR / path).resolve()
 
 
 def cmd_to_text(cmd: list[str]) -> str:
@@ -84,7 +84,7 @@ def checkpoint_epochs(*, epoch_start: int, epoch_end: int, epoch_interv: int) ->
 
 
 def clean_detector_cache(detector_run: Path) -> None:
-    """Remove raw detector artifacts after all formal V4m .dat files are exported."""
+    """Remove raw detector artifacts after all formal ORSDet flux head .dat files are exported."""
     for subdir_name in ("net_save", "fwd_res"):
         subdir = detector_run / subdir_name
         if not subdir.is_dir():
@@ -100,9 +100,9 @@ def clean_detector_cache(detector_run: Path) -> None:
 
 
 def detector_fwd_complete(path: Path, *, allow_training_roi: bool = False) -> bool:
-    # V4d-SA/V1a has 9 boxes * (8 YOLO fields + 5 aux fields), 32x32 grid,
+    # shared-angle target-source has 9 boxes * (8 YOLO fields + 5 aux fields), 32x32 grid,
     # and 69x69 full-image tiles. Keep this local so interrupted checkpoint
-    # predictions are detected before Stage9 post-processing starts.
+    # predictions are detected before flux head post-processing starts.
     expected_floats = 69 * 69 * 9 * (8 + 5) * 32 * 32
     expected_bytes = expected_floats * 4
     if path.is_file() and path.stat().st_size == expected_bytes:
@@ -134,11 +134,11 @@ def copy_formal_metadata(*, detector_run: Path, formal_run: Path, epoch: int) ->
         if src.is_file():
             shutil.copy2(src, formal_run / name)
     info = {
-        "model": "V4m Stage9 decoded-candidate flux head",
-        "profile": "v4m_stage9_v4d_sa_v1a_obb_phys",
+        "model": "ORSDet flux head decoded-candidate flux head",
+        "profile": "flux_head_shared_angle_target_source_obb_phys",
         "epoch_latest_exported": int(epoch),
         "source_run_dir": str(detector_run.resolve()),
-        "note": "Formal run stores one deliverable .dat per checkpoint: detector prefix + Stage9 trailer payload.",
+        "note": "Formal run stores one deliverable .dat per checkpoint: detector prefix + flux head trailer payload.",
     }
     (formal_run / "run_info.txt").write_text(
         "\n".join("%s=%s" % (key, value) for key, value in info.items()) + "\n",
@@ -151,8 +151,8 @@ def main() -> None:
     parser.add_argument(
         "--run-dir",
         type=Path,
-        default=Path("outputs/V4m_SA_V1a_train"),
-        help="Formal V4m run directory. Relative paths are resolved under flux_head/.",
+        default=Path("outputs/orsdet_flux_head_train"),
+        help="Formal ORSDet flux head run directory. Relative paths are resolved under flux_head/.",
     )
     parser.add_argument("--epochs", type=int, default=5000)
     parser.add_argument("--save-every", type=int, default=100)
@@ -160,15 +160,15 @@ def main() -> None:
     parser.add_argument("--epoch-start", type=int, default=100)
     parser.add_argument("--epoch-end", type=int, default=None)
     parser.add_argument("--epoch-interv", type=int, default=None)
-    parser.add_argument("--gpu", default=None, help="CUDA_VISIBLE_DEVICES used by both detector training and Stage9 build.")
+    parser.add_argument("--gpu", default=None, help="CUDA_VISIBLE_DEVICES used by both detector training and flux head build.")
     parser.add_argument("--python", default=sys.executable)
     parser.add_argument(
-        "--stage9-roi-forward",
+        "--flux-head-roi-forward",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Use training-region ROI forward for Stage9 checkpoint builds. Formal eval evaluation remains full-image.",
+        help="Use training-region ROI forward for flux head checkpoint builds. Formal eval evaluation remains full-image.",
     )
-    parser.add_argument("--stage9-roi-halo-tiles", type=int, default=2)
+    parser.add_argument("--flux-head-roi-halo-tiles", type=int, default=2)
     parser.add_argument(
         "--keep-source-checkpoint",
         action="store_true",
@@ -184,8 +184,8 @@ def main() -> None:
     formal_run = resolve_output_path(args.run_dir)
     cache_root = formal_run / ".cache"
     detector_run = cache_root / "detector"
-    train_post_root = cache_root / "stage9_train_post"
-    hook_root = cache_root / "stage9_hook"
+    train_post_root = cache_root / "flux_head_train_post"
+    hook_root = cache_root / "flux_head_hook"
     log_dir = cache_root / "logs"
     epoch_end = int(args.epoch_end if args.epoch_end is not None else args.epochs)
     epoch_interv = int(args.epoch_interv if args.epoch_interv is not None else args.save_every)
@@ -208,11 +208,11 @@ def main() -> None:
     if args.gpu is not None:
         env["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
 
-    print("V4m sequential training pipeline", flush=True)
+    print("ORSDet flux head sequential training pipeline", flush=True)
     print("  formal run : %s" % rel_or_abs(formal_run), flush=True)
     print("  detector   : %s" % rel_or_abs(detector_run), flush=True)
     print("  train post : %s" % rel_or_abs(train_post_root), flush=True)
-    print("  stage9 hook: %s" % rel_or_abs(hook_root), flush=True)
+    print("  flux_head hook: %s" % rel_or_abs(hook_root), flush=True)
     print("  logs       : %s" % rel_or_abs(log_dir), flush=True)
     print("  epochs     : %s" % " ".join(str(epoch) for epoch in epochs), flush=True)
     if args.gpu is not None:
@@ -229,11 +229,11 @@ def main() -> None:
         if not checkpoint_path.is_file():
             train_cmd = [
                 args.python,
-                str(V4D_TRAIN_SCRIPT),
+                str(DETECTOR_TRAIN_SCRIPT),
                 "--slim-mode",
-                "v4d_sa",
+                "shared_angle",
                 "--target-source",
-                "v1a",
+                "target_source",
                 "--run-dir",
                 str(detector_run),
                 "--epochs",
@@ -260,36 +260,36 @@ def main() -> None:
             print("Detector checkpoint exists, skipping training segment: %s" % checkpoint_path, flush=True)
 
         if formal_path.is_file():
-            print("Formal V4m .dat exists, skipping Stage9 build: %s" % formal_path, flush=True)
+            print("Formal ORSDet flux head .dat exists, skipping flux head build: %s" % formal_path, flush=True)
         else:
             fwd_path = detector_run / "fwd_res" / ("net0_%04d.dat" % checkpoint_epoch)
             if fwd_path.is_file() and not detector_fwd_complete(
                 fwd_path,
-                allow_training_roi=bool(args.stage9_roi_forward),
+                allow_training_roi=bool(args.flux_head_roi_forward),
             ):
                 print("Removing incomplete detector fwd_res:", fwd_path, flush=True)
                 fwd_path.unlink()
             if not detector_fwd_complete(
                 fwd_path,
-                allow_training_roi=bool(args.stage9_roi_forward),
+                allow_training_roi=bool(args.flux_head_roi_forward),
             ):
                 pred_cmd = [
                     args.python,
-                    str(V4D_PRED_SCRIPT),
+                    str(DETECTOR_PRED_SCRIPT),
                     str(checkpoint_epoch),
                     "--run-dir",
                     str(detector_run),
                     "--batch-size",
                     "8",
                     "--slim-mode",
-                    "v4d_sa",
+                    "shared_angle",
                 ]
-                if args.stage9_roi_forward:
+                if args.flux_head_roi_forward:
                     pred_cmd.extend(
                         [
                             "--training-roi-only",
                             "--roi-halo-tiles",
-                            str(args.stage9_roi_halo_tiles),
+                            str(args.flux_head_roi_halo_tiles),
                         ]
                     )
                 run_logged(
@@ -310,12 +310,12 @@ def main() -> None:
                     shutil.rmtree(train_post_dir)
                 train_post_cmd = [
                     args.python,
-                    str(V4D_POST_SCRIPT),
+                    str(DETECTOR_POST_SCRIPT),
                     str(checkpoint_epoch),
                     "--src-run-dir",
                     str(detector_run),
                     "--slim-mode",
-                    "v4d_sa",
+                    "shared_angle",
                     "--out-dir",
                     str(train_post_dir),
                     "--opt-rounds",
@@ -339,9 +339,9 @@ def main() -> None:
             hook_env.pop("PYTHONNOUSERSITE", None)
             hook_cmd = [
                 args.python,
-                str(STAGE9_HOOK_SCRIPT),
+                str(FLUX_HEAD_HOOK_SCRIPT),
                 "--display",
-                "V4m_SA_V1a@%04d" % checkpoint_epoch,
+                "ORSDet flux head @%04d" % checkpoint_epoch,
                 "--epoch",
                 str(checkpoint_epoch),
                 "--detector",
@@ -362,11 +362,11 @@ def main() -> None:
                 "--force",
             ]
             run_logged(
-                name="stage9_%04d" % checkpoint_epoch,
+                name="flux_head_%04d" % checkpoint_epoch,
                 cmd=hook_cmd,
                 cwd=REPO_DIR,
                 env=hook_env,
-                log_path=log_dir / ("stage9_%04d.log" % checkpoint_epoch),
+                log_path=log_dir / ("flux_head_%04d.log" % checkpoint_epoch),
             )
             copy_formal_metadata(detector_run=detector_run, formal_run=formal_run, epoch=checkpoint_epoch)
         previous_epoch = checkpoint_epoch
@@ -374,7 +374,7 @@ def main() -> None:
     if not args.keep_source_checkpoint:
         clean_detector_cache(detector_run)
 
-    print("V4m sequential training pipeline finished successfully.", flush=True)
+    print("ORSDet flux head sequential training pipeline finished successfully.", flush=True)
     print("Formal single .dat directory: %s" % rel_or_abs(formal_run / "net_save"), flush=True)
 
 

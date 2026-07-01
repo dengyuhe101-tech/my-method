@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Inspect or extract a V4m single-file .dat package."""
+"""Inspect or extract a ORSDet flux head single-file .dat package."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
-from dat_package import extract_v4m_dat, read_v4m_dat_info
+from dat_package import extract_flux_head_dat, read_flux_head_dat_info
 
 
 def main() -> None:
@@ -14,11 +14,11 @@ def main() -> None:
     parser.add_argument("dat", type=Path)
     parser.add_argument("--verify", action="store_true", help="Hash detector and payload bytes.")
     parser.add_argument("--extract-dir", type=Path, default=None)
-    parser.add_argument("--no-detector", action="store_true", help="When extracting, only extract the V4m payload.")
+    parser.add_argument("--no-detector", action="store_true", help="When extracting, only extract the ORSDet flux head payload.")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
-    info = read_v4m_dat_info(args.dat, verify=bool(args.verify))
+    info = read_flux_head_dat_info(args.dat, verify=bool(args.verify))
     print("path:", info.path)
     print("file_size:", info.file_size)
     print("detector_len:", info.detector_len)
@@ -28,7 +28,7 @@ def main() -> None:
     print("payload_sha256:", info.payload_sha256)
 
     if args.extract_dir is not None:
-        detector, model_dir = extract_v4m_dat(
+        detector, model_dir = extract_flux_head_dat(
             args.dat,
             args.extract_dir,
             extract_detector=not bool(args.no_detector),

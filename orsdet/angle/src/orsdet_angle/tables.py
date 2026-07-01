@@ -1,4 +1,4 @@
-"""CSV table IO for V2 angle target validation."""
+"""CSV table IO for angle angle target validation."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from .angle_codec import encode_theta_le90
 from .angle_loss import AspectWeightConfig, angle_weight_from_aspect
 
 
-V2_DIR = Path(__file__).resolve().parents[2]
-SKAO_DIR = V2_DIR.parent
-DEFAULT_V1_TABLE = SKAO_DIR / "geometry" / "rotated_training_source_table.csv"
-DEFAULT_OUTPUT_DIR = V2_DIR / "outputs"
+ANGLE_DIR = Path(__file__).resolve().parents[2]
+SKAO_DIR = ANGLE_DIR.parent
+DEFAULT_SOURCE_TABLE = SKAO_DIR / "geometry" / "rotated_training_source_table.csv"
+DEFAULT_OUTPUT_DIR = ANGLE_DIR / "outputs"
 
 ANGLE_TARGET_COLUMNS = (
     "source_id",
@@ -71,15 +71,15 @@ def structured_columns(table: np.ndarray) -> Sequence[str]:
     return table.dtype.names
 
 
-def load_v1_rotated_table(path: Path = DEFAULT_V1_TABLE) -> np.ndarray:
+def load_rotated_source_table(path: Path = DEFAULT_SOURCE_TABLE) -> np.ndarray:
     return load_named_csv(path)
 
 
 def build_angle_target_table(
-    v1_table: np.ndarray,
+    source_table: np.ndarray,
     weight_config: AspectWeightConfig | None = None,
 ) -> AngleTargetTable:
-    names = structured_columns(v1_table)
+    names = structured_columns(source_table)
     required = {
         "source_id",
         "theta_le90_deg",
@@ -94,19 +94,19 @@ def build_angle_target_table(
     }
     missing = sorted(required.difference(names))
     if missing:
-        raise ValueError("V1 rotated table is missing columns: %s" % ", ".join(missing))
+        raise ValueError("geometry rotated table is missing columns: %s" % ", ".join(missing))
 
-    theta = np.asarray(v1_table["theta_le90_deg"], dtype=np.float64)
+    theta = np.asarray(source_table["theta_le90_deg"], dtype=np.float64)
     encoded = encode_theta_le90(theta)
-    aspect = np.asarray(v1_table["aspect_ratio"], dtype=np.float64)
+    aspect = np.asarray(source_table["aspect_ratio"], dtype=np.float64)
     weights = angle_weight_from_aspect(aspect, weight_config)
-    w_pix = np.asarray(v1_table["w_pix"], dtype=np.float64)
-    h_pix = np.asarray(v1_table["h_pix"], dtype=np.float64)
+    w_pix = np.asarray(source_table["w_pix"], dtype=np.float64)
+    h_pix = np.asarray(source_table["h_pix"], dtype=np.float64)
     sqrt_area = np.sqrt(np.maximum(w_pix * h_pix, 0.0))
 
     data = np.column_stack(
         [
-            v1_table["source_id"],
+            source_table["source_id"],
             theta,
             encoded[:, 0],
             encoded[:, 1],
@@ -115,9 +115,9 @@ def build_angle_target_table(
             w_pix,
             h_pix,
             sqrt_area,
-            v1_table["flux_jy"],
-            v1_table["bmaj_arcsec"],
-            v1_table["bmin_arcsec"],
+            source_table["flux_jy"],
+            source_table["bmaj_arcsec"],
+            source_table["bmin_arcsec"],
         ]
     )
     return AngleTargetTable(data=data)

@@ -1,4 +1,4 @@
-"""Aspect-weighted angle loss for the V2 OBB angle head."""
+"""Aspect-weighted angle loss for the angle OBB angle head."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Runtime helpers for the V2.5 OBB module."""
+"""Runtime helpers for the candidate OBB module."""
 
 from __future__ import annotations
 
@@ -7,19 +7,19 @@ import types
 from pathlib import Path
 
 
-V25_DIR = Path(__file__).resolve().parents[2]
-SKAO_DIR = V25_DIR.parent
+CANDIDATE_DIR = Path(__file__).resolve().parents[2]
+SKAO_DIR = CANDIDATE_DIR.parent
 ROOT_DIR = SKAO_DIR.parent
 CIANNA_DIR = ROOT_DIR / "src"
-V2_DIR = SKAO_DIR / "angle"
-V1_DIR = SKAO_DIR / "geometry"
-DEFAULT_RUN_DIR = V25_DIR / "outputs" / "train_report"
+ANGLE_DIR = SKAO_DIR / "angle"
+GEOMETRY_DIR = SKAO_DIR / "geometry"
+DEFAULT_RUN_DIR = CANDIDATE_DIR / "outputs" / "train_report"
 
 
 def configure_paths() -> None:
-    sys.path.insert(0, str(V25_DIR / "src"))
-    sys.path.insert(0, str(V2_DIR / "src"))
-    sys.path.insert(0, str(V1_DIR / "src"))
+    sys.path.insert(0, str(CANDIDATE_DIR / "src"))
+    sys.path.insert(0, str(ANGLE_DIR / "src"))
+    sys.path.insert(0, str(GEOMETRY_DIR / "src"))
     sys.path.insert(0, str(SKAO_DIR))
 
     preferred = CIANNA_DIR / "build" / "lib.cianna4090-cuda" / "CIANNA.so"

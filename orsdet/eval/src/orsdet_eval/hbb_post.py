@@ -1,4 +1,4 @@
-"""CIANNA HBB prediction post-processing for V5."""
+"""CIANNA HBB prediction post-processing for evaluation."""
 
 from __future__ import annotations
 

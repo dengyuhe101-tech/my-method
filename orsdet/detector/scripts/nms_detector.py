@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lightweight V4d candidate decode plus V3 OBB NMS diagnostic."""
+"""Lightweight detector candidate decode plus rotated NMS OBB NMS diagnostic."""
 
 from __future__ import annotations
 
@@ -51,12 +51,12 @@ def drop_user_site():
 drop_user_site()
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-V4D_DIR = SCRIPT_DIR.parent
-SKAO_DIR = V4D_DIR.parent
-V3_DIR = SKAO_DIR / "nms"
+DETECTOR_DIR = SCRIPT_DIR.parent
+SKAO_DIR = DETECTOR_DIR.parent
+NMS_DIR = SKAO_DIR / "nms"
 for path in (
-    V4D_DIR / "src",
-    V3_DIR / "src",
+    DETECTOR_DIR / "src",
+    NMS_DIR / "src",
     SKAO_DIR / "candidates" / "src",
     SKAO_DIR / "angle" / "src",
     SKAO_DIR / "target_source" / "src",
@@ -138,11 +138,11 @@ def collect_candidates(
 
 
 def write_rows_csv(path: Path, rows: np.ndarray, boxes: np.ndarray, slim_mode: str):
-    if slim_mode == "v4d_s":
+    if slim_mode == "size":
         aux_header = "flux_norm,phys_bmaj_norm,phys_bmin_norm,obb_cos2,obb_sin2,phys_pa_cos2,phys_pa_sin2"
-    elif slim_mode == "v4k_dsa":
+    elif slim_mode == "flux_calib_gate":
         aux_header = "flux_norm,phys_bmaj_norm,phys_bmin_norm,delta_log_flux_raw,flux_gate_raw,shared_cos2,shared_sin2"
-    elif slim_mode == "v4i_dsa":
+    elif slim_mode == "flux_refine":
         aux_header = "flux_norm,phys_bmaj_norm,phys_bmin_norm,delta_log_flux_raw,shared_cos2,shared_sin2"
     else:
         aux_header = "flux_norm,phys_bmaj_norm,phys_bmin_norm,shared_cos2,shared_sin2"
@@ -161,7 +161,7 @@ def write_rows_csv(path: Path, rows: np.ndarray, boxes: np.ndarray, slim_mode: s
 def main():
     from orsdet_nms import local_nms
     from orsdet_detector import DEFAULT_RUN_DIR, configure_paths, decode_rows_obb, install_numba_fallback_if_needed
-    from orsdet_detector import normalize_slim_mode, v4d_layout
+    from orsdet_detector import normalize_slim_mode, detector_layout
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("epoch", nargs="?", type=int, default=1)
@@ -173,12 +173,12 @@ def main():
     parser.add_argument("--out-range", type=int, default=2)
     parser.add_argument(
         "--slim-mode",
-        default="v4d_s",
-        choices=("v4d_s", "v4d-sa", "v4d_sa", "size", "size-angle", "size_angle"),
+        default="size",
+        choices=("size", "shared_angle", "size-angle", "size_angle"),
     )
     args = parser.parse_args()
     args.slim_mode = normalize_slim_mode(args.slim_mode)
-    layout = v4d_layout(args.slim_mode)
+    layout = detector_layout(args.slim_mode)
 
     configure_paths()
     install_numba_fallback_if_needed()
@@ -217,8 +217,8 @@ def main():
     boxes = decode_rows_obb(rows, lims, layout.mode)
     kept_rows, kept_boxes = local_nms(rows, boxes)
 
-    raw_path = out_dir / ("v4d_candidates_%04d.csv" % args.epoch)
-    kept_path = out_dir / ("v4d_obb_nms_%04d.csv" % args.epoch)
+    raw_path = out_dir / ("detector_candidates_%04d.csv" % args.epoch)
+    kept_path = out_dir / ("detector_obb_nms_%04d.csv" % args.epoch)
     summary_path = out_dir / ("summary_%04d.txt" % args.epoch)
     write_rows_csv(raw_path, rows, boxes, layout.mode)
     write_rows_csv(kept_path, kept_rows, kept_boxes, layout.mode)

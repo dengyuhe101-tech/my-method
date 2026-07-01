@@ -43,7 +43,7 @@ class AngleRoundTripError:
 class BeamModel:
     """Gaussian beam model in angular FWHM units.
 
-    The SDC1 FITS header stores BMAJ/BMIN in degrees. V1a uses this beam for
+    The SDC1 FITS header stores BMAJ/BMIN in degrees. target-source uses this beam for
     the Gaussian SIZE=2 policy before converting source axes to pixel boxes.
     """
 
@@ -56,7 +56,7 @@ class BeamModel:
 class EnvelopeModelConfig:
     """Parameters for model-derived Gaussian source envelopes.
 
-    The current size-aware V1a default uses `contour_peak_fraction=1/16` for
+    The current size-aware target-source default uses `contour_peak_fraction=1/16` for
     SIZE=2 Gaussian sources. SIZE=1 LAS and SIZE=3 Exponential sources are
     handled outside this Gaussian envelope helper.
     """
@@ -428,7 +428,7 @@ def source_params_to_envelope_box(
 ):
     """Convert source physics to a model-derived visible OBB envelope.
 
-    V1 used `2 * BMAJ/BMIN` directly. V1a instead treats catalog axes as an
+    geometry used `2 * BMAJ/BMIN` directly. target-source instead treats catalog axes as an
     intrinsic Gaussian source, convolves that source with the FITS beam, chooses
     a visible Gaussian contour, then expands the result by optional
     core-centroid displacement and a small pixel margin. No image segmentation

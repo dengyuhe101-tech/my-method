@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Utilities for V4m single-file .dat packages."""
+"""Utilities for ORSDet flux head single-file .dat packages."""
 
 from __future__ import annotations
 
@@ -14,14 +14,14 @@ import struct
 import tarfile
 
 
-MAGIC = b"CIANNA_V4M_DAT_V1\n"
+MAGIC = b"ORSDET_FLUX_DAT_A\n"
 FOOTER_STRUCT = struct.Struct("<QQ32s32s")
 FOOTER_LEN = FOOTER_STRUCT.size + len(MAGIC)
 CHUNK_SIZE = 1024 * 1024
 
 
 @dataclass(frozen=True)
-class V4mDatInfo:
+class FluxHeadDatInfo:
     path: Path
     detector_len: int
     payload_len: int
@@ -65,14 +65,14 @@ def build_payload(model_dir: Path, detector_path: Path, detector_sha256: str, de
         raise FileNotFoundError(model_dir / "fit_model.json")
 
     manifest = {
-        "format": "CIANNA_V4M_DAT_V1",
+        "format": "ORSDET_FLUX_DAT_A",
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "detector_source": str(detector_path.resolve()),
         "detector_len": detector_len,
         "detector_sha256": detector_sha256,
         "model_dir_source": str(model_dir),
         "payload_files": ["model_package/" + path.name for path in files],
-        "notes": "Detector bytes are stored as the .dat prefix; V4m frozen post-head files are stored in this payload.",
+        "notes": "Detector bytes are stored as the .dat prefix; ORSDet flux-head files are stored in this payload.",
     }
 
     buffer = io.BytesIO()
@@ -81,13 +81,13 @@ def build_payload(model_dir: Path, detector_path: Path, detector_sha256: str, de
             _add_bytes(tar, "model_package/" + path.name, path.read_bytes())
         _add_bytes(
             tar,
-            "model_package/v4m_dat_manifest.json",
+            "model_package/flux_head_dat_manifest.json",
             (json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"),
         )
     return buffer.getvalue()
 
 
-def pack_v4m_dat(detector_path: Path, model_dir: Path, out_dat: Path, *, force: bool = False) -> V4mDatInfo:
+def pack_flux_head_dat(detector_path: Path, model_dir: Path, out_dat: Path, *, force: bool = False) -> FluxHeadDatInfo:
     detector_path = detector_path.resolve()
     model_dir = model_dir.resolve()
     out_dat = out_dat.resolve()
@@ -121,25 +121,26 @@ def pack_v4m_dat(detector_path: Path, model_dir: Path, out_dat: Path, *, force: 
         out_handle.write(MAGIC)
 
     tmp_path.replace(out_dat)
-    return read_v4m_dat_info(out_dat, verify=False)
+    return read_flux_head_dat_info(out_dat, verify=False)
 
 
-def read_v4m_dat_info(path: Path, *, verify: bool = False) -> V4mDatInfo:
+def read_flux_head_dat_info(path: Path, *, verify: bool = False) -> FluxHeadDatInfo:
     path = path.resolve()
     file_size = path.stat().st_size
     if file_size < FOOTER_LEN:
-        raise ValueError("File is too small to be a V4m .dat package: %s" % path)
+        raise ValueError("File is too small to be a ORSDet flux head .dat package: %s" % path)
     with path.open("rb") as handle:
         handle.seek(file_size - FOOTER_LEN)
         footer = handle.read(FOOTER_LEN)
-    if not footer.endswith(MAGIC):
-        raise ValueError("Missing V4m .dat trailer magic: %s" % path)
+    magic = footer[-len(MAGIC) :]
+    if magic != MAGIC:
+        raise ValueError("Missing ORSDet flux head .dat trailer magic: %s" % path)
     detector_len, payload_len, detector_sha, payload_sha = FOOTER_STRUCT.unpack(footer[: FOOTER_STRUCT.size])
     expected_size = detector_len + payload_len + FOOTER_LEN
     if expected_size != file_size:
-        raise ValueError("Invalid V4m .dat size: expected %d, got %d" % (expected_size, file_size))
+        raise ValueError("Invalid ORSDet flux head .dat size: expected %d, got %d" % (expected_size, file_size))
 
-    info = V4mDatInfo(
+    info = FluxHeadDatInfo(
         path=path,
         detector_len=detector_len,
         payload_len=payload_len,
@@ -148,11 +149,11 @@ def read_v4m_dat_info(path: Path, *, verify: bool = False) -> V4mDatInfo:
         file_size=file_size,
     )
     if verify:
-        verify_v4m_dat(info)
+        verify_flux_head_dat(info)
     return info
 
 
-def verify_v4m_dat(info: V4mDatInfo) -> None:
+def verify_flux_head_dat(info: FluxHeadDatInfo) -> None:
     detector_digest = hashlib.sha256()
     payload_digest = hashlib.sha256()
     with info.path.open("rb") as handle:
@@ -167,7 +168,7 @@ def verify_v4m_dat(info: V4mDatInfo) -> None:
         while remaining:
             chunk = handle.read(min(CHUNK_SIZE, remaining))
             if not chunk:
-                raise ValueError("Unexpected EOF while reading V4m payload")
+                raise ValueError("Unexpected EOF while reading ORSDet flux head payload")
             payload_digest.update(chunk)
             remaining -= len(chunk)
     if detector_digest.hexdigest() != info.detector_sha256:
@@ -176,7 +177,7 @@ def verify_v4m_dat(info: V4mDatInfo) -> None:
         raise ValueError("Payload sha256 mismatch in %s" % info.path)
 
 
-def read_payload_bytes(info: V4mDatInfo) -> bytes:
+def read_payload_bytes(info: FluxHeadDatInfo) -> bytes:
     with info.path.open("rb") as handle:
         handle.seek(info.detector_len)
         payload = handle.read(info.payload_len)
@@ -191,18 +192,18 @@ def _safe_extract_payload(payload: bytes, out_dir: Path) -> None:
         for member in tar.getmembers():
             target = (out_dir / member.name).resolve()
             if out_dir not in target.parents and target != out_dir:
-                raise ValueError("Unsafe path in V4m payload: %s" % member.name)
+                raise ValueError("Unsafe path in ORSDet flux head payload: %s" % member.name)
         tar.extractall(out_dir)
 
 
-def extract_v4m_dat(
+def extract_flux_head_dat(
     path: Path,
     out_dir: Path,
     *,
     extract_detector: bool = True,
     force: bool = False,
 ) -> tuple[Path | None, Path]:
-    info = read_v4m_dat_info(path, verify=False)
+    info = read_flux_head_dat_info(path, verify=False)
     out_dir = out_dir.resolve()
     model_dir = out_dir / "model_package"
     detector_out = out_dir / "detector.dat"
@@ -235,13 +236,13 @@ def extract_v4m_dat(
 
     _safe_extract_payload(read_payload_bytes(info), out_dir)
     if not model_dir.is_dir():
-        raise FileNotFoundError("V4m payload did not contain model_package/")
+        raise FileNotFoundError("ORSDet flux head payload did not contain model_package/")
     return detector_out, model_dir
 
 
-def is_v4m_dat(path: Path) -> bool:
+def is_flux_head_dat(path: Path) -> bool:
     try:
-        read_v4m_dat_info(path, verify=False)
+        read_flux_head_dat_info(path, verify=False)
     except Exception:
         return False
     return True

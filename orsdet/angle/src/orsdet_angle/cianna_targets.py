@@ -1,10 +1,10 @@
-"""Target conversion helpers for the native CIANNA V2 angle head.
+"""Target conversion helpers for the native CIANNA angle angle head.
 
 The original SKAO_SDC1 data generator writes five additional YOLO parameters:
 
     flux, bmaj, bmin, cos(PA), shifted_sin(PA)
 
-V2 keeps the first three scalar parameters in the existing parameter branch and
+angle keeps the first three scalar parameters in the existing parameter branch and
 moves PA into a dedicated encoded angle branch:
 
     cos(2 PA), sin(2 PA), angle_weight
@@ -23,14 +23,14 @@ from .angle_loss import AspectWeightConfig, angle_weight_from_aspect
 
 
 LEGACY_NB_PARAM = 5
-V2_NB_PARAM = 3
-V2_NB_ANGLE = 2
+ANGLE_NB_PARAM = 3
+ANGLE_NB_ANGLE = 2
 
 
 @dataclass(frozen=True)
-class V2TargetSpec:
-    nb_param: int = V2_NB_PARAM
-    nb_angle: int = V2_NB_ANGLE
+class AngleTargetSpec:
+    nb_param: int = ANGLE_NB_PARAM
+    nb_angle: int = ANGLE_NB_ANGLE
     angle_weight_channels: int = 1
 
     @property
@@ -74,16 +74,16 @@ def aspect_from_box_block(block):
     return np.maximum(width, height) / np.minimum(width, height)
 
 
-def convert_legacy_targets_to_v2(
+def convert_legacy_targets_to_angle(
     legacy_targets,
     max_nb_obj_per_image: int,
     lims=None,
     weight_config: AspectWeightConfig | None = None,
-    spec: V2TargetSpec | None = None,
+    spec: AngleTargetSpec | None = None,
 ):
-    """Convert original HBB+PA target arrays to V2 angle-head target arrays."""
+    """Convert original HBB+PA target arrays to angle angle-head target arrays."""
 
-    spec = spec or V2TargetSpec()
+    spec = spec or AngleTargetSpec()
     legacy = np.asarray(legacy_targets, dtype=np.float32)
     if legacy.ndim != 2:
         raise ValueError("legacy_targets must be a 2-D array.")
@@ -127,5 +127,5 @@ def convert_legacy_targets_to_v2(
     return out
 
 
-def v2_target_dim(max_nb_obj_per_image: int) -> int:
-    return V2TargetSpec().target_dim(max_nb_obj_per_image)
+def angle_target_dim(max_nb_obj_per_image: int) -> int:
+    return AngleTargetSpec().target_dim(max_nb_obj_per_image)
